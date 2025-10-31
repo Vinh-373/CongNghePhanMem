@@ -1,1 +1,0 @@
-export const getDashboardInfo = async (req, res) => {}

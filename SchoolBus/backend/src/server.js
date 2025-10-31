@@ -1,37 +1,39 @@
 import express from 'express';
 import cors from 'cors';
-import loginRouters from './routes/loginRouters.js';
-import registerRouters from './routes/registerRouters.js';
-import dashboardRouters from './routes/dashboardRouters.js';
-import { connectDB } from './config/db.js';
 import dotenv from 'dotenv';
+import { connectDB } from './config/db.js';
+import authRoutes from './routes/authRouters.js';
+import userRoutes from './routes/userRouters.js';
 
 dotenv.config();
 
 const PORT = process.env.PORT || 5001;
 const app = express();
 
-// Middleware
+// 🧩 Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: 'http://localhost:5173', // URL frontend (Vite React)
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Health check route
+// ✅ Cho phép truy cập thư mục upload ảnh
+app.use("/uploads", express.static("src/uploads"));
+
+// ✅ Health check
 app.get('/schoolbus/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString() 
+  });
 });
 
-// Auth Routes
-app.use("/schoolbus/auth", loginRouters);
-app.use("/schoolbus/auth", registerRouters);
+// ✅ Auth routes
+app.use("/schoolbus/auth", authRoutes);
 
-// Dashboard or other routes can be added here
-app.use('/schoolbus/dashboard', dashboardRouters);
-
+app.use("/schoolbus/user", userRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -41,7 +43,7 @@ app.use((req, res) => {
   });
 });
 
-// Error handling middleware
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
   res.status(500).json({ 
@@ -51,15 +53,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
+// ✅ Start server
 async function startServer() {
   try {
     await connectDB();
-    console.log('✅ MongoDB connected successfully');
+    console.log('✅ MySQL connected successfully');
     
     app.listen(PORT, () => {
-      console.log(`✅ Server is running on port ${PORT}`);
+      console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`🌐 Health check: http://localhost:${PORT}/schoolbus/health`);
+      console.log(`🖼️  Static uploads: http://localhost:${PORT}/uploads/avatars/...`);
     });
   } catch (error) {
     console.error('❌ Server failed to start:', error);
