@@ -17,7 +17,7 @@ import ParentDashboardPage from "./pages/parent/DashboardPage.jsx";
 import ChildInfo from "./pages/parent/ChildInfoPage.jsx";
 import ParentAccount from "./pages/parent/AccountPage.jsx";
 
-function App() {
+function App() 
   return (
     <>
       <Toaster />
