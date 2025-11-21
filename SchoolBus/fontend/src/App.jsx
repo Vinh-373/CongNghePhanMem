@@ -16,6 +16,8 @@ import AccountPage from "./pages/admin/AccountPage.jsx";
 import ParentDashboardPage from "./pages/parent/DashboardPage.jsx";
 import ChildInfo from "./pages/parent/ChildInfoPage.jsx";
 import ParentAccount from "./pages/parent/AccountPage.jsx";
+import PointsRegisterPage from "./pages/parent/RegisterPointsPage.jsx";
+import DriverDashboard from "./pages/driver/DashboardPage.jsx";
 
 function App() {
   return (
@@ -44,7 +46,13 @@ function App() {
             <Route path="dashboard" element={<ParentDashboardPage />} />
             <Route path="children" element={<ChildInfo />} />
             <Route path="account" element={<ParentAccount />} />
+            <Route path="pickup-point" element={<PointsRegisterPage />} />
             <Route path="notifications" element={<NotificationPage />} />
+          </Route>
+          <Route path="/driver/schoolbus" element={<MainLayout />}>
+            <Route path="dashboard" element={<DriverDashboard />} />
+            {/* <Route path="account" element={<AccountPage />} />
+            <Route path="notifications" element={<NotificationPage />} /> */}
           </Route>
           {/* 404 */}
           <Route path="*" element={<NotFound />} />

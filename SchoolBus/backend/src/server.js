@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRouters.js';
 import userRoutes from './routes/userRouters.js';
+import adminRoutes from './routes/adminRouters.js';
 
 dotenv.config();
 
@@ -34,6 +35,7 @@ app.get('/schoolbus/health', (req, res) => {
 app.use("/schoolbus/auth", authRoutes);
 
 app.use("/schoolbus/user", userRoutes);
+app.use("/schoolbus/admin", adminRoutes); 
 
 // 404 handler
 app.use((req, res) => {

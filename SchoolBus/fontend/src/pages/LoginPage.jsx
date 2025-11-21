@@ -6,11 +6,25 @@ import { useNavigate } from "react-router-dom";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // ✅ Nếu đã đăng nhập thì chuyển sang dashboard
+  // ✅ Nếu đã đăng nhập thì chuyển sang dashboard tương ứng
   useEffect(() => {
     const user = localStorage.getItem("user");
-    if (user) {
-      navigate("/admin/schoolbus/dashboard");
+    const token = localStorage.getItem("token");
+    if (user && token) {
+      try {
+        const userData = JSON.parse(user);
+        // Điều hướng theo role (vaitro)
+        // 0: Admin, 1: Tài xế, 2: Phụ huynh
+        if (userData.vaitro === 0) {
+          navigate("/admin/schoolbus/dashboard");
+        } else if (userData.vaitro === 1) {
+          navigate("/driver/schoolbus/dashboard");
+        } else if (userData.vaitro === 2) {
+          navigate("/parent/schoolbus/dashboard");
+        }
+      } catch (err) {
+        console.error("Lỗi parse user:", err);
+      }
     }
   }, [navigate]);
 
@@ -85,8 +99,19 @@ export default function LoginPage() {
       // ✅ Thành công (trạng thái 2)
       toast.success("🎉 Đăng nhập thành công!");
       localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-      setTimeout(() => navigate("/admin/schoolbus/dashboard"), 800);
+      // Điều hướng theo role (vaitro)
+      // 0: Admin, 1: Tài xế, 2: Phụ huynh
+      setTimeout(() => {
+        if (data.user.vaitro === 0) {
+          navigate("/admin/schoolbus/dashboard");
+        } else if (data.user.vaitro === 1) {
+          navigate("/driver/schoolbus/dashboard");
+        } else if (data.user.vaitro === 2) {
+          navigate("/parent/schoolbus/dashboard");
+        }
+      }, 800);
     } catch (err) {
       toast.error(`❌ Lỗi đăng nhập: ${err.message}`);
     }

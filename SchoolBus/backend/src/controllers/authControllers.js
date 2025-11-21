@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { NguoiDung } from "../models/index.js";
+import { NguoiDung,PhuHuynh } from "../models/index.js";
 // ---------------- ĐĂNG KÝ ----------------
 export const register = async (req, res) => {
   try {
@@ -25,11 +25,14 @@ export const register = async (req, res) => {
       hoten,
       sodienthoai: dienthoai,
       email,
-      diachi,
       matkhau: hashedPassword,
       vaitro: 2, // Mặc định là user
       trangthai: 1, // Đang chờ phê duyệt
       anhdaidien,
+    });
+    const newPhuHuynh = await PhuHuynh.create({
+      idnguoidung: newUser.id,
+      diachi: diachi,
     });
 
     res.status(201).json({
@@ -44,6 +47,26 @@ export const register = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Lỗi đăng ký:", error);
+    
+    // Xử lý các lỗi Sequelize
+    if (error.name === "SequelizeUniqueConstraintError") {
+      const field = error.errors[0].path;
+      const value = error.errors[0].value;
+      
+      if (field === "email") {
+        return res.status(400).json({ message: "Email này đã được đăng ký!" });
+      } else if (field === "sodienthoai") {
+        return res.status(400).json({ message: "Số điện thoại này đã được đăng ký!" });
+      }
+      
+      return res.status(400).json({ message: `${field} đã tồn tại!` });
+    }
+    
+    if (error.name === "SequelizeValidationError") {
+      const messages = error.errors.map(e => e.message).join(", ");
+      return res.status(400).json({ message: `Dữ liệu không hợp lệ: ${messages}` });
+    }
+    
     res.status(500).json({ message: "Lỗi máy chủ khi đăng ký!" });
   }
 };

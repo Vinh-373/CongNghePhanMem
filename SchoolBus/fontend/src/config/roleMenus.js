@@ -1,6 +1,6 @@
 import {
   Home, Bus, UserCheck, MapPin, Users, Calendar, MessageCircle, Settings, UsersRound, UserPen,
-   CalendarClock, Bell, User, MessageSquare,
+   CalendarClock, Bell, User, MessageSquare,Route
 } from "lucide-react";
 
 // Mã vai trò dựa trên bảng 'nguoidung' trong schoolbus.sql: 0=Admin, 1=Tài xế, 2=Phụ huynh
@@ -13,11 +13,12 @@ export const ADMIN_MENU = [
   { icon: Home, label: "Trang chủ", href: "/admin/schoolbus/dashboard" },
   { icon: Bus, label: "Quản lý xe buýt", href: "/admin/schoolbus/vehicles" },
   { icon: UserCheck, label: "Quản lý tài xế", href: "/admin/schoolbus/drivers" },
-  { icon: MapPin, label: "Tuyến đường & điểm dừng", href: "/admin/schoolbus/routes" },
+  { icon: Route, label: "Quản lý Tuyến đường", href: "/admin/schoolbus/routes" },
+  { icon: MapPin, label: "Quản lý điểm đón", href: "/admin/schoolbus/pickup-points" },
   { icon: Users, label: "Quản lý học sinh", href: "/admin/schoolbus/students" },
   { icon: UsersRound, label: "Quản lý phụ huynh", href: "/admin/schoolbus/parents" },
-  { icon: Calendar, label: "Lịch trình chuyến", href: "/admin/schoolbus/schedules" },
-  { icon: MessageCircle, label: "Thông báo", href: "/admin/schoolbus/notification" },
+  { icon: Calendar, label: "Quản lý lịch trình", href: "/admin/schoolbus/schedules" },
+  { icon: MessageCircle, label: "Quản lý thông báo", href: "/admin/schoolbus/notification" },
   { icon: UserPen, label: "Thông tin tài khoản", href: "/admin/schoolbus/account" },
   { icon: Settings, label: "Cài đặt hệ thống", href: "/admin/schoolbus/settings" },
 ];
@@ -29,6 +30,7 @@ export const ADMIN_MENU = [
 export const PARENT_MENU = [
   { icon: Home, label: "Trang chủ", href: "/parent/schoolbus/dashboard" },
   { icon: User, label: "Hồ sơ Học sinh", href: "/parent/schoolbus/children" },
+  { icon : CalendarClock, label: "Đăng ký điểm đón", href: "/parent/schoolbus/pickup-point" },
   { icon: UserPen, label: "Thông tin tài khoản", href: "/parent/schoolbus/account" },
   { icon: Bell, label: "Thông báo", href: "/parent/schoolbus/notifications" },
 ];

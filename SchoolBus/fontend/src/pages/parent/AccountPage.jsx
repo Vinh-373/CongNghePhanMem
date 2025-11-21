@@ -15,8 +15,8 @@ import { useOutletContext } from "react-router-dom";
 // Map role số sang tên
 const roleMap = {
   0: "Admin",
-  1: "Parent",
-  2: "Driver",
+  2: "Parent",
+  1: "Driver",
 };
 
 export default function AccountPage() {
@@ -26,7 +26,6 @@ export default function AccountPage() {
     email: "",
     phone: "",
     role: null,
-    organization: "",
     address: "",
     avatarUrl: "",
   });
@@ -46,7 +45,6 @@ export default function AccountPage() {
         email: user.email || "",
         phone: user.phone || "",
         role: user.role ?? null,
-        organization: user.organization || "",
         address: user.address || "",
         avatarUrl: user.avatarUrl || "",
       });
@@ -84,6 +82,7 @@ export default function AccountPage() {
       </div>
     );
   }
+  console.log("data user", userData);
 
   return (
     <div className="space-y-6">

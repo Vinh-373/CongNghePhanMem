@@ -35,14 +35,45 @@ const SuCo = SuCoModel(sequelize, DataTypes);
 // =====================
 // Thiết lập quan hệ
 // =====================
-TaiXe.belongsTo(NguoiDung, { foreignKey: "idnguoidung" });
-PhuHuynh.belongsTo(NguoiDung, { foreignKey: "idnguoidung" });
+// 1. Tài xế (TaiXe) liên kết với Người dùng (NguoiDung)
+TaiXe.belongsTo(NguoiDung, { 
+    foreignKey: "idnguoidung" 
+});
 
-HocSinh.belongsTo(PhuHuynh, { foreignKey: "idphuhuynh" });
-HocSinh.belongsTo(DiemDung, { foreignKey: "iddiemdon" });
+// 2. Phụ huynh (PhuHuynh) liên kết với Người dùng (NguoiDung)
+// Cần alias 'userInfo' để JOIN từ Học sinh -> Phụ huynh -> Người dùng (như trong Controller)
+PhuHuynh.belongsTo(NguoiDung, { 
+    foreignKey: "idnguoidung", 
+    as: "userInfo" 
+});
+// TuyenDuong có nhiều DiemDung
+TuyenDuong.hasMany(DiemDung, { 
+  foreignKey: "idtuyenduong", 
+  as: "diemDungs"   // alias bắt buộc
+});
 
+// DiemDung thuộc về TuyenDuong
+DiemDung.belongsTo(TuyenDuong, { 
+  foreignKey: "idtuyenduong",
+  as: "tuyenDuong"  // alias bắt buộc
+});
+// 3. Học sinh (HocSinh) liên kết với Phụ huynh (PhuHuynh)
+// Cần alias 'parentInfo'
+HocSinh.belongsTo(PhuHuynh, { 
+    foreignKey: "idphuhuynh", 
+    as: "parentInfo" 
+});
+
+// 4. Học sinh (HocSinh) liên kết với Điểm dừng (DiemDung)
+// Cần alias 'diemDonMacDinh' (Đây là nguyên nhân gây lỗi chính)
+HocSinh.belongsTo(DiemDung, { 
+    foreignKey: "iddiemdon", 
+    as: "diemDonMacDinh",
+    targetKey: 'iddiemdung' // 🔑 Khóa chính của DiemDung là iddiemdung
+});
+
+// Các quan hệ còn lại giữ nguyên
 DiemDung.belongsTo(TuyenDuong, { foreignKey: "idtuyenduong" });
-XeBuyt.belongsTo(TuyenDuong, { foreignKey: "idtuyenduong" });
 
 LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt" });
 LichChuyen.belongsTo(TaiXe, { foreignKey: "idtaixe" });
@@ -58,6 +89,9 @@ ThongBao.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
 SuCo.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 SuCo.belongsTo(LichChuyen, { foreignKey: "idlich" });
+
+
+
 
 // =====================
 // Xuất tất cả model

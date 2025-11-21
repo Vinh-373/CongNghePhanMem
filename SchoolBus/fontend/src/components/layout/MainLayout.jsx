@@ -33,7 +33,7 @@ export default function MainLayout({ onLogout }) {
           email: data.email || "",
           phone: data.sodienthoai || "",
           role: data.vaitro !== undefined ? Number(data.vaitro) : 0,
-          organization: data.tochuc || "",
+          address: data.diachi || "",
           avatarUrl: data.anhdaidien || "",
         });
       })
@@ -69,6 +69,7 @@ export default function MainLayout({ onLogout }) {
       </div>
     );
   }
+  console.log("user in layout", user);
 
   return (
     <div className="flex min-h-screen bg-gray-50">

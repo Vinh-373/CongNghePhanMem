@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bus, Users, Calendar, AlertCircle, MapPin, Clock, CheckCircle, XCircle } from "lucide-react";
-
+import GoogleMapDisplay from "@/components/Map/GoogleMapDisplay";
 // === DỮ LIỆU HARD-CODE (MVP1) ===
 const stats = {
   vehicles: { active: 28, total: 35 },
@@ -34,152 +34,149 @@ export default function DashboardPage() {
   };
 
   return (
-    
-      <div className="space-y-6 p-6 md:p-10 bg-gray-50 min-h-screen">
-        <h1 className="text-3xl font-bold tracking-tight mb-4">Bảng Điều Khiển Hoạt Động</h1>
-        
-        {/* === 1. THẺ TỔNG QUAN === */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {/* Xe hoạt động */}
-          <Card className="shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Xe hoạt động</CardTitle>
-              <Bus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.vehicles.active} / {stats.vehicles.total}</div>
-              <p className="text-xs text-muted-foreground">
-                {Math.round((stats.vehicles.active / stats.vehicles.total) * 100)}% xe đang hoạt động
-              </p>
-            </CardContent>
-          </Card>
 
-          {/* Học sinh đang đi */}
-          <Card className="shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Học sinh đang đi</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.students.onBoard}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.students.change} so với hôm qua
-              </p>
-            </CardContent>
-          </Card>
+    <div className="space-y-6 p-6 md:p-10 bg-gray-50 min-h-screen">
+      <h1 className="text-3xl font-bold tracking-tight mb-4">Bảng Điều Khiển Hoạt Động</h1>
 
-          {/* Chuyến hôm nay */}
-          <Card className="shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Chuyến hôm nay</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.trips.today}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.trips.delayed} chuyến bị trễ
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Cảnh báo */}
-          <Card className="shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Cảnh báo</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.alerts.count}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.alerts.issues.join(" + ")}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* === 2. BẢN ĐỒ + BẢNG CHUYẾN === */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Bản đồ (Placeholder - Sprint 2 sẽ real-time) */}
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Bản đồ xe buýt (Real-time)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full h-80 flex items-center justify-center text-muted-foreground">
-                <p className="text-center">
-                  Bản đồ sẽ hiển thị vị trí 28 xe đang chạy<br />
-                  <span className="text-xs">Sprint 2: Leaflet + WebSocket</span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Bảng chuyến hôm nay */}
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Chuyến hôm nay
-                </span>
-                <Button variant="outline" size="sm">Xem tất cả</Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Biển số</TableHead>
-                    <TableHead>Tài xế</TableHead>
-                    <TableHead>Tuyến</TableHead>
-                    <TableHead>Giờ</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {todayTrips.map((trip) => (
-                    <TableRow key={trip.id}>
-                      <TableCell className="font-medium">{trip.plate}</TableCell>
-                      <TableCell>{trip.driver}</TableCell>
-                      <TableCell>{trip.route}</TableCell>
-                      <TableCell>{trip.time}</TableCell>
-                      <TableCell>{getStatusBadge(trip.status)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* === 3. THÔNG BÁO MỚI NHẤT (Placeholder) === */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Thông báo gần đây</CardTitle>
+      {/* === 1. THẺ TỔNG QUAN === */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {/* Xe hoạt động */}
+        <Card className="shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Xe hoạt động</CardTitle>
+            <Bus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-3 text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                <span>Xe 51A-12345 đang đến gần điểm ABC Park</span>
-                <span className="text-xs text-muted-foreground ml-auto">07:05</span>
-              </div>
-              <div className="flex items-center gap-3 text-red-600">
-                <XCircle className="h-4 w-4" />
-                <span>Chuyến #123 bị trễ 10 phút</span>
-                <span className="text-xs text-muted-foreground ml-auto">07:02</span>
-              </div>
-              <div className="flex items-center gap-3 text-amber-600">
-                <AlertCircle className="h-4 w-4" />
-                <span>Tài xế báo hỏng điều hòa – Xe 51B-99999</span>
-                <span className="text-xs text-muted-foreground ml-auto">06:55</span>
-              </div>
-            </div>
+            <div className="text-2xl font-bold">{stats.vehicles.active} / {stats.vehicles.total}</div>
+            <p className="text-xs text-muted-foreground">
+              {Math.round((stats.vehicles.active / stats.vehicles.total) * 100)}% xe đang hoạt động
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Học sinh đang đi */}
+        <Card className="shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Học sinh đang đi</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.students.onBoard}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.students.change} so với hôm qua
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Chuyến hôm nay */}
+        <Card className="shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Chuyến hôm nay</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.trips.today}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.trips.delayed} chuyến bị trễ
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Cảnh báo */}
+        <Card className="shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Cảnh báo</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.alerts.count}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.alerts.issues.join(" + ")}
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* === 2. BẢN ĐỒ + BẢNG CHUYẾN === */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Bản đồ */}
+        <Card className="shadow-lg h-[400px] p-0 overflow-hidden">
+          <GoogleMapDisplay
+            school={{ lat: 10.788229, lng: 106.703970 }} // trường học cũ
+            busStops={[
+              { lat: 10.778000, lng: 106.690000 },
+              { lat: 10.774500, lng: 106.693500 },
+              { lat: 10.770000, lng: 106.695000 },
+            ]}
+            busPosition={{ lat: 10.770, lng: 106.695 }} // xe bus hiện tại (điểm đầu)
+            studentPickup={{ lat: 10.770, lng: 106.695 }}
+            zoom={15}
+          />
+        </Card>
+
+        {/* Bảng chuyến hôm nay */}
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Chuyến hôm nay
+              </span>
+              <Button variant="outline" size="sm">Xem tất cả</Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Biển số</TableHead>
+                  <TableHead>Tài xế</TableHead>
+                  <TableHead>Tuyến</TableHead>
+                  <TableHead>Giờ</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {todayTrips.map((trip) => (
+                  <TableRow key={trip.id}>
+                    <TableCell className="font-medium">{trip.plate}</TableCell>
+                    <TableCell>{trip.driver}</TableCell>
+                    <TableCell>{trip.route}</TableCell>
+                    <TableCell>{trip.time}</TableCell>
+                    <TableCell>{getStatusBadge(trip.status)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* === 3. THÔNG BÁO MỚI NHẤT (Placeholder) === */}
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>Thông báo gần đây</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center gap-3 text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              <span>Xe 51A-12345 đang đến gần điểm ABC Park</span>
+              <span className="text-xs text-muted-foreground ml-auto">07:05</span>
+            </div>
+            <div className="flex items-center gap-3 text-red-600">
+              <XCircle className="h-4 w-4" />
+              <span>Chuyến #123 bị trễ 10 phút</span>
+              <span className="text-xs text-muted-foreground ml-auto">07:02</span>
+            </div>
+            <div className="flex items-center gap-3 text-amber-600">
+              <AlertCircle className="h-4 w-4" />
+              <span>Tài xế báo hỏng điều hòa – Xe 51B-99999</span>
+              <span className="text-xs text-muted-foreground ml-auto">06:55</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

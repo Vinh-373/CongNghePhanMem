@@ -1,17 +1,21 @@
 // src/models/DiemDung.js
 export default (sequelize, DataTypes) => {
   const DiemDung = sequelize.define("DiemDung", {
-    id: {
+    iddiemdung: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },
-    tendiem: {
+    tendiemdon: {
       type: DataTypes.STRING,
       allowNull: false,
     },
     diachi: {
       type: DataTypes.STRING,
+      allowNull: false,
+    },
+    idtuyenduong: {
+      type: DataTypes.INTEGER,
       allowNull: false,
     },
   });
