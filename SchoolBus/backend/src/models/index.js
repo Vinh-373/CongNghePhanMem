@@ -36,6 +36,8 @@ const SuCo = SuCoModel(sequelize, DataTypes);
 // Thiết lập quan hệ
 // =====================
 // 1. Tài xế (TaiXe) liên kết với Người dùng (NguoiDung)
+
+// cái ban đầu
 TaiXe.belongsTo(NguoiDung, { 
     foreignKey: "idnguoidung" 
 });

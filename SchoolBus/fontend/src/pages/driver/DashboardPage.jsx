@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ListChecks, Truck, CalendarCheck, UserCheck, AlertTriangle, XCircle, Bell, Siren, Clock, MapPin, CheckCircle } from "lucide-react"; 
+import GoogleMapDisplay from "@/components/Map/GoogleMapDisplay";
+
 
 // --- DỮ LIỆU MẪU (DEMO) ---
 const INITIAL_STUDENT_DATA = [
@@ -178,13 +180,22 @@ const DriverDashboard = () => {
                 </CardHeader>
                 
                 <CardContent className="p-0 flex flex-col md:flex-row">
-                    {/* Bản Đồ Demo */}
-                    <div className="flex-1 h-64 bg-gray-300 flex items-center justify-center text-gray-600 font-medium p-4 relative">
-                        
-                        Map Demo - Vị trí xe
-                    </div>
+                    {/* /* Bản Đồ Demo */}
+                    <div className="flex-1" style={{ minHeight: '400px' }}> {/* Đặt chiều cao cho Map */}
+                        <GoogleMapDisplay
+                            school={{ lat: 10.788229, lng: 106.703970 }}
+                            busStops={[
+                                { lat: 10.778000, lng: 106.690000 },
+                                { lat: 10.774500, lng: 106.693500 },
+                                { lat: 10.770000, lng: 106.695000 },
+                            ]}
+                            busPosition={{ lat: 10.770, lng: 106.695 }}
+                            studentPickup={{ lat: 10.770, lng: 106.695 }}
+                            zoom={15}
+                        />
+                    </div>  
 
-                    {/* Nút Hành động */}
+                     {/* Nút Hành động  */}
                     <div className="p-4 md:w-64 flex flex-col justify-center border-t md:border-t-0 md:border-l bg-blue-50">
                         <h3 className="font-semibold text-blue-800 mb-2">Hành động:</h3>
                         <Button 
@@ -198,7 +209,8 @@ const DriverDashboard = () => {
                         {isArrived && (
                             <p className="text-xs text-center text-blue-600 mt-2 font-medium">Đã xác nhận thành công.</p>
                         )}
-                    </div>
+                    </div> 
+
                 </CardContent>
             </Card>
 
