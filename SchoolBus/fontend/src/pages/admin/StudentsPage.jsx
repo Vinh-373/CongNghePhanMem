@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import {
   Card,
@@ -25,6 +25,8 @@ import {
   Trash2,
   Phone,
   Loader2,
+  Search,
+  XCircle,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarImage } from "@radix-ui/react-avatar";
@@ -50,8 +52,9 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchStudentsData = async () => {
+  const fetchStudentsData = useCallback(async () => {
     setLoading(true);
     setError(null);
     const token = localStorage.getItem("token");
@@ -71,11 +74,11 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchStudentsData();
-  }, []);
+  }, [fetchStudentsData]);
 
   const getInitials = (fullName) =>
     fullName
@@ -92,7 +95,12 @@ export default function StudentsPage() {
       const token = localStorage.getItem("token");
       const fd = new FormData();
       for (const key in formData) {
-        fd.append(key, formData[key]);
+        // Xử lý file ảnh đại diện (anhdaidien) và các trường khác
+        if (key === 'anhdaidien' && formData[key] instanceof File) {
+             fd.append(key, formData[key], formData[key].name);
+        } else if (formData[key] !== null && formData[key] !== undefined) {
+             fd.append(key, formData[key]);
+        }
       }
 
       const res = await fetch(ADD_STUDENT_ENDPOINT, {
@@ -110,6 +118,38 @@ export default function StudentsPage() {
       toast.error(`❌ Lỗi thêm học sinh: ${err.message}`);
     }
   };
+
+  // Logic lọc dữ liệu theo Tên, Lớp, Điểm dừng, Phụ huynh và Trạng thái
+  const filteredStudents = useMemo(() => {
+    if (loading) return [];
+    if (!searchTerm) return students;
+    
+    const lowerCaseSearch = searchTerm.toLowerCase();
+
+    return students.filter(student => {
+        // 1. Tên Học sinh (hoten)
+        const nameMatch = student.hoten?.toLowerCase().includes(lowerCaseSearch);
+        
+        // 2. Lớp học (lop)
+        const classMatch = student.lop?.toLowerCase().includes(lowerCaseSearch);
+
+        // 3. Điểm dừng (tendiemdon, diachi)
+        const stopName = student.diemDonMacDinh?.tendiemdon?.toLowerCase();
+        const stopAddress = student.diemDonMacDinh?.diachi?.toLowerCase();
+        const stopMatch = stopName?.includes(lowerCaseSearch) || stopAddress?.includes(lowerCaseSearch);
+
+        // 4. Thông tin phụ huynh (Tên, SĐT)
+        const parentName = student.parentInfo?.userInfo?.hoten?.toLowerCase();
+        const parentPhone = student.parentInfo?.userInfo?.sodienthoai?.toLowerCase();
+        const parentMatch = parentName?.includes(lowerCaseSearch) || parentPhone?.includes(lowerCaseSearch);
+
+        // 5. Trạng thái ("Đang học")
+        const statusMatch = "đang học".includes(lowerCaseSearch);
+
+        return nameMatch || classMatch || stopMatch || parentMatch || statusMatch;
+    });
+  }, [searchTerm, students, loading]);
+
 
   return (
     <div className="space-y-6">
@@ -159,13 +199,29 @@ export default function StudentsPage() {
         </CardHeader>
 
         <CardContent>
+           {/* Thanh tìm kiếm */}
+            <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input 
+                    type="text" 
+                    placeholder="Tìm kiếm theo Tên, Lớp, Phụ huynh, Điểm dừng..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#175e7a] focus:border-[#175e7a] transition duration-150 shadow-sm text-base"
+                />
+            </div>
+            
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
               Đang tải dữ liệu...
             </div>
           ) : error ? (
-            <div className="text-red-600 py-10">{error}</div>
+            <div className="flex flex-col items-center justify-center py-10 bg-red-50 border border-red-200 rounded-lg">
+                <XCircle className="h-8 w-8 text-red-600 mb-3" />
+                <p className="text-red-700 text-center font-medium px-4">{error}</p>
+                <Button onClick={() => fetchStudentsData()} className="mt-4 bg-red-600 hover:bg-red-700">Thử lại</Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -180,7 +236,8 @@ export default function StudentsPage() {
               </TableHeader>
 
               <TableBody>
-                {students.map((student) => (
+                {filteredStudents.length > 0 ? ( 
+                  filteredStudents.map((student) => (
                   <TableRow key={student.mahocsinh}>
                     <TableCell className="font-medium flex items-center gap-3">
                       <Avatar className="h-8 w-8">
@@ -239,7 +296,14 @@ export default function StudentsPage() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )) // ⬅️ SỬA LỖI: Thêm dấu đóng ngoặc tròn cho map
+                ) : (
+                   <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                            Không tìm thấy học sinh nào phù hợp với từ khóa "{searchTerm}".
+                        </TableCell>
+                    </TableRow>
+                )}
               </TableBody>
             </Table>
           )}

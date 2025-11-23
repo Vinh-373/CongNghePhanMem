@@ -140,7 +140,7 @@ const GoogleMapDisplay = ({
         const stopMarker = new window.google.maps.Marker({
           position: stop,
           map,
-          title: `Điểm dừng ${index + 1}`,
+          title: `${stop.label || `Điểm dừng ${index + 1}`}`,
           icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
         });
         markersRef.current.push(stopMarker);

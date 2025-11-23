@@ -1,4 +1,3 @@
-// src/models/index.js
 import sequelize from "../config/sequelize.js";
 import { DataTypes } from "sequelize";
 
@@ -37,45 +36,60 @@ const SuCo = SuCoModel(sequelize, DataTypes);
 // =====================
 // 1. Tài xế (TaiXe) liên kết với Người dùng (NguoiDung)
 TaiXe.belongsTo(NguoiDung, { 
-    foreignKey: "idnguoidung" 
+    foreignKey: "idnguoidung" ,
+    as: "userInfo"
 });
 
 // 2. Phụ huynh (PhuHuynh) liên kết với Người dùng (NguoiDung)
-// Cần alias 'userInfo' để JOIN từ Học sinh -> Phụ huynh -> Người dùng (như trong Controller)
 PhuHuynh.belongsTo(NguoiDung, { 
     foreignKey: "idnguoidung", 
     as: "userInfo" 
 });
+// Phụ huynh (PhuHuynh) có nhiều Học sinh (HocSinh) [QUAN HỆ BỔ SUNG]
+PhuHuynh.hasMany(HocSinh, {
+    foreignKey: "idphuhuynh",
+    as: "hocSinhs" 
+});
+
 // TuyenDuong có nhiều DiemDung
 TuyenDuong.hasMany(DiemDung, { 
   foreignKey: "idtuyenduong", 
-  as: "diemDungs"   // alias bắt buộc
+  as: "diemDungs"  // alias bắt buộc
 });
 
 // DiemDung thuộc về TuyenDuong
 DiemDung.belongsTo(TuyenDuong, { 
   foreignKey: "idtuyenduong",
-  as: "tuyenDuong"  // alias bắt buộc
+  as: "tuyenDuong"  // alias bắt buộc
 });
+
+// DiemDung có nhiều HocSinh (Quan hệ 1-nhiều: 1 điểm dừng là mặc định cho nhiều học sinh)
+DiemDung.hasMany(HocSinh, {
+    foreignKey: "iddiemdon",
+    as: "hocSinhs"
+});
+
 // 3. Học sinh (HocSinh) liên kết với Phụ huynh (PhuHuynh)
-// Cần alias 'parentInfo'
 HocSinh.belongsTo(PhuHuynh, { 
     foreignKey: "idphuhuynh", 
     as: "parentInfo" 
 });
 
 // 4. Học sinh (HocSinh) liên kết với Điểm dừng (DiemDung)
-// Cần alias 'diemDonMacDinh' (Đây là nguyên nhân gây lỗi chính)
 HocSinh.belongsTo(DiemDung, { 
     foreignKey: "iddiemdon", 
     as: "diemDonMacDinh",
-    targetKey: 'iddiemdung' // 🔑 Khóa chính của DiemDung là iddiemdung
+    targetKey: 'iddiemdung' 
 });
 
-// Các quan hệ còn lại giữ nguyên
-DiemDung.belongsTo(TuyenDuong, { foreignKey: "idtuyenduong" });
+// === QUAN HỆ BỔ SUNG CHO LICH CHUYEN ===
+// 5. Lịch chuyến (LichChuyen) thuộc về Tuyến đường (TuyenDuong)
+LichChuyen.belongsTo(TuyenDuong, { 
+    foreignKey: "idtuyenduong",
+    as: "tuyenDuongInfo" // Dùng alias riêng để tránh trùng với DiemDung.belongsTo(TuyenDuong)
+});
 
-LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt" });
+LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
 LichChuyen.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 
 DangKyChuyen.belongsTo(HocSinh, { foreignKey: "mahocsinh" });
@@ -91,24 +105,22 @@ SuCo.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 SuCo.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
 
-
-
 // =====================
 // Xuất tất cả model
 // =====================
 export {
-  sequelize,
-  NguoiDung,
-  TaiXe,
-  PhuHuynh,
-  HocSinh,
-  TuyenDuong,
-  DiemDung,
-  XeBuyt,
-  LichChuyen,
-  DangKyChuyen,
-  TrangThaiDonTra,
-  ViTriXe,
-  ThongBao,
-  SuCo
+    sequelize,
+    NguoiDung,
+    TaiXe,
+    PhuHuynh,
+    HocSinh,
+    TuyenDuong,
+    DiemDung,
+    XeBuyt,
+    LichChuyen,
+    DangKyChuyen,
+    TrangThaiDonTra,
+    ViTriXe,
+    ThongBao,
+    SuCo
 };

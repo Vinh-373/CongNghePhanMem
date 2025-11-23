@@ -16,7 +16,24 @@ export default (sequelize, DataTypes) => {
     },
     idtuyenduong: {
       type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    thutu: {
+      type: DataTypes.TINYINT,
+      allowNull: true,
+    },
+    kinhdo: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+    },
+    vido: {
+      type: DataTypes.DOUBLE,   
+      allowNull: true,
+    },
+    trangthai: {
+      type: DataTypes.TINYINT,
       allowNull: false,
+      defaultValue: 1, // Mặc định là '1' - Hoạt động
     },
   });
   return DiemDung;

@@ -104,7 +104,7 @@ export default function DashboardPage() {
           <GoogleMapDisplay
             school={{ lat: 10.788229, lng: 106.703970 }} // trường học cũ
             busStops={[
-              { lat: 10.778000, lng: 106.690000 },
+              { lat: 10.778000, lng: 106.690000, label: "Điểm dừng 43434" },
               { lat: 10.774500, lng: 106.693500 },
               { lat: 10.770000, lng: 106.695000 },
             ]}
