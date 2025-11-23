@@ -1,5 +1,4 @@
-import MainLayout from "@/components/layout/MainLayout";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -20,18 +19,37 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import {
   MapPin,
   Route,
   ListChecks,
   PlusCircle,
   FilePenLine,
   Trash2,
+  Eye,
 } from "lucide-react";
+
+// SỬA LỖI ĐƯỜNG DẪN IMPORT: 
+// Quay lại sử dụng alias tuyệt đối vì đường dẫn tương đối bị lỗi.
+// LƯU Ý: Nếu lỗi biên dịch vẫn xảy ra, bạn cần thay thế đường dẫn này 
+// bằng đường dẫn tương đối chính xác dựa trên vị trí thực tế của file GoogleMapDisplay
+import GoogleMapDisplay from "@/components/Map/GoogleMapDisplay"; 
+
 
 export default function RoutesPage() {
   const [routesData, setRoutesData] = useState([]);
   const [totalStops, setTotalStops] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // POPUP MAP
+  const [openMap, setOpenMap] = useState(false);
+  const [currentRoute, setCurrentRoute] = useState(null);
 
   // Fetch API danh sách tuyến đường
   useEffect(() => {
@@ -40,9 +58,10 @@ export default function RoutesPage() {
         const res = await axios.get(
           "http://localhost:5001/schoolbus/admin/get-all-routes"
         );
-        // Backend trả về: { routes: [...], totalStops: number }
         setRoutesData(res.data.routes);
         setTotalStops(res.data.totalStops || 0);
+        
+        console.log("✅ Danh sách tuyến đường:", res.data.routes);
       } catch (err) {
         console.error("❌ Lỗi lấy danh sách tuyến đường:", err);
         toast.error("Không thể tải danh sách tuyến đường!");
@@ -66,6 +85,35 @@ export default function RoutesPage() {
     }
   };
 
+  // Xem chi tiết điểm dừng
+  const handleShowStops = (route) => {
+    // 1. Cập nhật tuyến đường đang được chọn
+    setCurrentRoute(route);
+    // 2. Mở Popup
+    setOpenMap(true);
+  };
+
+  // TÍNH TOÁN DỮ LIỆU ĐIỂM DỪNG CHO MAP
+  const busStopsArray = useMemo(() => {
+    if (!currentRoute?.diemDungs || currentRoute.diemDungs.length === 0) {
+      return [];
+    }
+    
+    // Đảm bảo dữ liệu là kiểu số (Number) và lọc bỏ các giá trị không hợp lệ (NaN)
+    return currentRoute.diemDungs
+      .map((stop) => {
+        const lng = Number(stop.kinhdo);
+        const lat = Number(stop.vido);
+        const label = stop.tendiemdon || "";
+        return { lat, lng, label };
+      })
+      .filter(stop => 
+        // Lọc bỏ các giá trị không phải là số (NaN)
+        !isNaN(stop.lat) && 
+        !isNaN(stop.lng)
+      );
+  }, [currentRoute]); // Chỉ tính toán lại khi currentRoute thay đổi
+console.log("🚏 Điểm dừng cho bản đồ:", busStopsArray);
   // Thống kê
   const stats = {
     totalRoutes: routesData.length,
@@ -77,6 +125,7 @@ export default function RoutesPage() {
 
   return (
     <div className="space-y-6">
+
       {/* === Thẻ thống kê === */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -133,7 +182,7 @@ export default function RoutesPage() {
                 <TableHead>Mô tả</TableHead>
                 <TableHead className="text-center">Số điểm dừng</TableHead>
                 <TableHead>Trạng thái</TableHead>
-                <TableHead className="text-right">Hành động</TableHead>
+                <TableHead className="text-center">Hành động</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -142,7 +191,7 @@ export default function RoutesPage() {
                   <TableCell className="font-medium">
                     T-{route.idtuyenduong.toString().padStart(3, "0")}
                   </TableCell>
-                  <TableCell className="font-medium">{route.tentuyen}</TableCell>
+                  <TableCell>{route.tentuyen}</TableCell>
                   <TableCell>{route.mota || "..."}</TableCell>
                   <TableCell className="text-center">
                     {route.diemDungs ? route.diemDungs.length : 0}
@@ -150,14 +199,26 @@ export default function RoutesPage() {
                   <TableCell>{getStatusBadge(route.trangthai)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {/* nút xem bản đồ */}
                       <Button
                         variant="outline"
                         size="icon"
-                        className="hover:bg-blue-100"
+                        className="text-green-600 hover:bg-green-100 hover:text-green-700"
+                        onClick={() => handleShowStops(route)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+
+                      {/* nút Sửa */}
+                      <Button
+                        variant="outline"
+                        size="icon"
                         onClick={() => alert(`Sửa tuyến: ${route.tentuyen}`)}
                       >
                         <FilePenLine className="h-4 w-4" />
                       </Button>
+
+                      {/* nút Xóa */}
                       <Button
                         variant="outline"
                         size="icon"
@@ -174,6 +235,38 @@ export default function RoutesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* === POPUP Map === */}
+      <Dialog open={openMap} onOpenChange={setOpenMap} className="w-5xl">
+        {/* SỬA 1: Dùng flex-col và h-[80vh] cho DialogContent */}
+        <DialogContent className="sm:max-w-5xl lg:max-w-6xl w-full h-[80vh] flex flex-col bg-white">
+          
+          {/* Header cố định chiều cao */}
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>
+              Bản đồ tuyến: {currentRoute?.tentuyen || ""}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {/* SỬA 2: Bọc Map trong div chiếm hết không gian còn lại (flex-grow) 
+              Và chỉ render khi openMap là true để đảm bảo Map được khởi tạo đúng kích thước
+          */}
+          {openMap && (
+            <div className="flex-grow w-full">
+                <GoogleMapDisplay
+                    // Dữ liệu đã được map từ kinhdo/vido sang lat/lng và đảm bảo là số hợp lệ
+                    busStops={busStopsArray} 
+                    school={{ lat: 10.788229, lng: 106.703970 }}
+                    // Cần đảm bảo busPosition cũng là số hợp lệ, dùng điểm dừng đầu tiên nếu có, nếu không thì dùng tọa độ mặc định
+                    busPosition={busStopsArray.length > 0 ? busStopsArray[0] : { lat: 10.788229, lng: 106.703970 }} 
+                    studentPickup={busStopsArray.length > 0 ? busStopsArray[0] : { lat: 10.788229, lng: 106.703970 }}
+                    zoom={15}
+                    className="w-full h-full"
+                />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

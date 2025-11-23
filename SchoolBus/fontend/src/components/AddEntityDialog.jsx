@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -10,8 +10,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge"; // Cần cho Multi-select
-import { ChevronDown, X } from 'lucide-react'; // Icons cho Select và Multi-select
+import { Badge } from "@/components/ui/badge";
+import { X } from 'lucide-react';
 import {
     Select,
     SelectContent,
@@ -21,11 +21,28 @@ import {
 } from "@/components/ui/select"; 
 
 // ----------------------------------------------------------------------------------
-// 🎯 Placeholder cho Multi-Select Combobox (Giữ nguyên)
+// 🎯 Helper Functions - HỖ TRỢ CẢ STRING VÀ OBJECT
+// ----------------------------------------------------------------------------------
+const getOptionValue = (opt) => {
+    return typeof opt === 'object' && opt !== null ? opt.value : opt;
+};
+
+const getOptionLabel = (opt) => {
+    return typeof opt === 'object' && opt !== null ? opt.label : opt;
+};
+
+// ----------------------------------------------------------------------------------
+// 🎯 Multi-Select Combobox - HỖ TRỢ CẢ STRING VÀ OBJECT
 // ----------------------------------------------------------------------------------
 const MultiSelectCombobox = ({ value, options, onChange, placeholder, fieldName }) => {
-    // Giá trị 'value' là một mảng các item đã chọn (ví dụ: ["ID_1", "ID_2"])
-    const availableOptions = options.filter(opt => !value.includes(opt));
+    // Tìm label cho một value đã chọn
+    const getLabelForValue = (val) => {
+        const option = options.find(opt => getOptionValue(opt) === val);
+        return option ? getOptionLabel(option) : val;
+    };
+
+    // Lọc các options chưa được chọn
+    const availableOptions = options.filter(opt => !value.includes(getOptionValue(opt)));
     
     // Xóa một item
     const handleRemove = (itemToRemove) => {
@@ -46,7 +63,7 @@ const MultiSelectCombobox = ({ value, options, onChange, placeholder, fieldName 
             {/* Hiển thị các mục đã chọn */}
             {value.map(item => (
                 <Badge key={item} className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-                    {item}
+                    {getLabelForValue(item)}
                     <X className="ml-1 h-3 w-3 cursor-pointer" onClick={() => handleRemove(item)} />
                 </Badge>
             ))}
@@ -57,12 +74,16 @@ const MultiSelectCombobox = ({ value, options, onChange, placeholder, fieldName 
                     <SelectTrigger className="h-7 w-[100px] text-xs">
                         <SelectValue placeholder="Chọn..." />
                     </SelectTrigger>
-                    <SelectContent>
-                        {availableOptions.map(opt => (
-                            <SelectItem key={opt} value={opt}>
-                                {opt}
-                            </SelectItem>
-                        ))}
+                    <SelectContent className="bg-white">
+                        {availableOptions.map(opt => {
+                            const optValue = getOptionValue(opt);
+                            const optLabel = getOptionLabel(opt);
+                            return (
+                                <SelectItem key={optValue} value={optValue}>
+                                    {optLabel}
+                                </SelectItem>
+                            );
+                        })}
                     </SelectContent>
                 </Select>
             )}
@@ -94,11 +115,10 @@ function AddEntityDialog({
     const [formData, setFormData] = useState(initialData);
     const [filePreviews, setFilePreviews] = useState({});
 
-    // Cập nhật lại initialData khi fields thay đổi
-    useState(() => {
+    // Cập nhật formData khi fields thay đổi
+    useEffect(() => {
         setFormData(initialData);
-    }, [fields]);
-
+    }, [JSON.stringify(fields.map(f => f.name))]);
 
     const handleOpenChange = (open) => {
         if (!open) {
@@ -108,7 +128,7 @@ function AddEntityDialog({
         }
     };
 
-    // 🎯 HÀM CHUNG CẬP NHẬT FORM DATA (bao gồm select và multi-select)
+    // 🎯 HÀM CHUNG CẬP NHẬT FORM DATA
     const handleDataChange = (name, value) => {
         setFormData(prev => ({ 
             ...prev, 
@@ -141,10 +161,10 @@ function AddEntityDialog({
         if (field.required) {
             const value = formData[field.name];
             // Kiểm tra cho các loại cơ bản
-            if (field.type !== 'multi-select' && (value === '' || value === 0 || value === null)) {
+            if (field.type !== 'multi-select' && (value === '' || value === 0 || value === null || value === undefined)) {
                 return false;
             }
-            // Kiểm tra cho multi-select (phải có ít nhất 1 item)
+            // Kiểm tra cho multi-select (phải có ít nhất 1 item nếu required)
             if (field.type === 'multi-select' && Array.isArray(value) && value.length === 0) {
                 return false;
             }
@@ -154,15 +174,14 @@ function AddEntityDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            {/* Tăng kích thước dialog và THAY ĐỔI CSS Grid */}
             <DialogContent className="sm:max-w-[600px] bg-white"> 
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
                 
-                {/* 💥 THAY ĐỔI TẠI ĐÂY: Sử dụng grid 2 cột cho màn hình vừa (sm) trở lên */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 py-4">
+                {/* Grid 2 cột với scroll nếu form dài */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                     {fields.map((field) => (
                         <div 
                             key={field.name} 
@@ -172,27 +191,32 @@ function AddEntityDialog({
                                 {field.label} {field.required && <span className="text-red-500">*</span>}
                             </Label>
 
-                            {/* 🎯 XỬ LÝ LOẠI SELECT */}
+                            {/* 🎯 XỬ LÝ LOẠI SELECT - HỖ TRỢ CẢ STRING VÀ OBJECT */}
                             {field.type === 'select' && field.options ? (
                                 <Select 
                                     onValueChange={(value) => handleDataChange(field.name, value)} 
                                     value={formData[field.name]}
                                     name={field.name}
+                                    disabled={field.disabled || field.isLoading}
                                 >
                                     <SelectTrigger className="w-full">
                                         <SelectValue placeholder={field.placeholder || "Chọn một mục..."} />
                                     </SelectTrigger>
-                                    <SelectContent className={'bg-white'}>
-                                        {field.options.map(option => (
-                                            <SelectItem key={option} value={option}>
-                                                {option}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent className="bg-white max-h-[300px]">
+                                        {field.options.map(option => {
+                                            const optValue = getOptionValue(option);
+                                            const optLabel = getOptionLabel(option);
+                                            return (
+                                                <SelectItem key={optValue} value={optValue}>
+                                                    {optLabel}
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
                             ) :
                             
-                            /* 🎯 XỬ LÝ LOẠI MULTI-SELECT */
+                            /* 🎯 XỬ LÝ LOẠI MULTI-SELECT - HỖ TRỢ CẢ STRING VÀ OBJECT */
                             field.type === 'multi-select' && field.options ? (
                                 <MultiSelectCombobox
                                     fieldName={field.name}
@@ -212,6 +236,7 @@ function AddEntityDialog({
                                         type="file"
                                         accept={field.accept || 'image/*'}
                                         onChange={(e) => handleFileChange(e, field.name)}
+                                        disabled={field.disabled}
                                     />
                                     {filePreviews[field.name] && (
                                         <img
@@ -233,6 +258,7 @@ function AddEntityDialog({
                                     onChange={handleInputChange}
                                     placeholder={field.placeholder}
                                     min={field.type === 'number' && field.min !== undefined ? field.min : undefined}
+                                    disabled={field.disabled}
                                 />
                             )}
                         </div>

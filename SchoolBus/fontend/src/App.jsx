@@ -18,10 +18,13 @@ import ChildInfo from "./pages/parent/ChildInfoPage.jsx";
 import ParentAccount from "./pages/parent/AccountPage.jsx";
 import PointsRegisterPage from "./pages/parent/RegisterPointsPage.jsx";
 import DriverDashboard from "./pages/driver/DashboardPage.jsx";
+//<<<<<<< HEAD
 import DriverSchedules from "./pages/driver/SchedulesPage.jsx";
 import DiverAccount from "./pages/driver/AccountPage.jsx";
 
 
+import PickupPointsPage from "./pages/admin/PickupPointsPage.jsx";
+//>>>>>>> 543817bbff38117e4fca4de16c287e927f856868
 
 function App() {
   return (
@@ -45,6 +48,7 @@ function App() {
             <Route path="schedules" element={<SchedulesPage />} />
             <Route path="parents" element={<ParentsPage />} />
             <Route path="account" element={<AccountPage />} />
+            <Route path="pickup-points" element={<PickupPointsPage />} />
           </Route>
           <Route path="/parent/schoolbus" element={<MainLayout />}>
             <Route path="dashboard" element={<ParentDashboardPage />} />
