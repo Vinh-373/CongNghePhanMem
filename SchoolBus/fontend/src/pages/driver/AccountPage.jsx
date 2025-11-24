@@ -9,404 +9,301 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { 
-  User, 
-  KeyRound, 
-  Mail, 
-  Phone, 
-  Building, 
-  CreditCard, 
+import {
+  Dialog,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  User,
+  Mail,
+  Phone,
+  CreditCard,
   Calendar,
   Shield,
   Clock,
   BusFront,
-  UserCircle,
-  AlertCircle
+  Pencil
 } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 
-// Map role số sang tên
+import EditDriverDialog from "./EditDriverDialog";
 const roleMap = {
   0: "Admin",
   1: "Phụ huynh",
   2: "Tài xế",
 };
 
-// Dữ liệu tài xế mẫu (trong thực tế sẽ lấy từ API)
-const mockDriverData = {
-  id: "TX001",
-  name: "Nguyễn Văn An",
-  email: "nguyenvanan@buscompany.vn",
-  phone: "0912345678",
-  role: 2,
-  organization: "Công ty Vận tải ABC",
-  avatarUrl: "",
-  driverCode: "TX-2024-001",
-  licenseNumber: "B2-123456789",
-  licenseExpiry: "2028-12-31",
-  experienceYears: 8,
-  vehicleTypes: ["Xe buýt 29 chỗ", "Xe buýt 45 chỗ"],
-  emergencyContact: {
-    name: "Nguyễn Thị Bình",
-    relationship: "Vợ",
-    phone: "0987654321"
-  },
-  joinDate: "2020-03-15",
-  status: "Đang hoạt động",
-  totalTrips: 2456,
-  safetyRating: 4.8
-};
-
 export default function AccountPage() {
-  // Nếu có context từ router, dùng nó, nếu không dùng mock data
-  let user;
-  try {
-    const context = useOutletContext();
-    user = context?.user || mockDriverData;
-  } catch {
-    user = mockDriverData;
-  }
+  const [userData, setUserData] = useState(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const [userData, setUserData] = useState({
-    name: "",
+  // 1. XÓA 'matkhau' khỏi state khởi tạo
+  const [editForm, setEditForm] = useState({
+    hoten: "",
+    sodienthoai: "",
     email: "",
-    phone: "",
-    role: null,
-    organization: "",
-    avatarUrl: "",
-    driverCode: "",
-    licenseNumber: "",
-    licenseExpiry: "",
-    experienceYears: 0,
-    vehicleTypes: [],
-    emergencyContact: {
-      name: "",
-      relationship: "",
-      phone: ""
-    },
-    joinDate: "",
-    status: "",
+    kinhnghiem: 0,
+    mabang: "",
   });
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [isEditingEmergency, setIsEditingEmergency] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+  // API endpoints
+  const API_DRIVER_INFO = "http://localhost:5001/schoolbus/driver";
+  const API_DRIVER_ID_BY_USER = "http://localhost:5001/schoolbus/driver/user_id";
+  const API_UPDATE_DRIVER = "http://localhost:5001/schoolbus/driver/update";
 
-  // 🟢 Cập nhật userData khi prop user thay đổi
-  useEffect(() => {
-    if (user) {
-      setUserData({
-        name: user.name || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        role: user.role ?? null,
-        organization: user.organization || "",
-        avatarUrl: user.avatarUrl || "",
-        driverCode: user.driverCode || "",
-        licenseNumber: user.licenseNumber || "",
-        licenseExpiry: user.licenseExpiry || "",
-        experienceYears: user.experienceYears || 0,
-        vehicleTypes: user.vehicleTypes || [],
-        emergencyContact: user.emergencyContact || {
-          name: "",
-          relationship: "",
-          phone: ""
-        },
-        joinDate: user.joinDate || "",
-        status: user.status || "",
+  const userId = localStorage.getItem("idnguoidung");
+  const [driverId, setDriverId] = useState(null);
+
+  // Hàm đồng bộ dữ liệu userData vào editForm và mở Dialog để làm mới dữ liệu mỗi lần mở
+  const syncDataToEditForm = () => {
+    if (userData && userData.userInfo) {
+      setEditForm({
+        hoten: userData.userInfo.hoten || "",
+        sodienthoai: userData.userInfo.sodienthoai || "",
+        email: userData.userInfo.email || "",
+        kinhnghiem: userData.kinhnghiem || "",
+        mabang: userData.mabang || "",
       });
     }
-  }, [user]);
-
-  const handleUserChange = (e) => {
-    setUserData({ ...userData, [e.target.name]: e.target.value });
+    setIsDialogOpen(true);
   };
 
-  const handleEmergencyContactChange = (e) => {
-    setUserData({
-      ...userData,
-      emergencyContact: {
-        ...userData.emergencyContact,
-        [e.target.name]: e.target.value
+
+  // ------------------------------------------------
+  // 2. LOGIC LOAD DATA VÀ CẬP NHẬT FORM
+  // ------------------------------------------------
+  const fetchDriverData = async () => {
+    if (!userId) {
+      toast.error("Không tìm thấy ID người dùng.");
+      return;
+    }
+
+    let currentDriverId = null;
+
+    try {
+      const idRes = await axios.get(`${API_DRIVER_ID_BY_USER}/${userId}`);
+      currentDriverId = idRes.data.idtaixe;
+      setDriverId(currentDriverId);
+
+    } catch (idErr) {
+      console.error("Lỗi tìm kiếm idtaixe:", idErr);
+      toast.error("Không tìm thấy ID tài xế tương ứng!");
+      return;
+    }
+
+    if (!currentDriverId) return;
+
+    try {
+      const res = await axios.get(`${API_DRIVER_INFO}/${currentDriverId}`);
+      const driverData = res.data.driver;
+      setUserData(driverData);
+
+      // KHỞI TẠO FORM CHỈNH SỬA VỚI DỮ LIỆU HIỆN TẠI (Lần đầu mount)
+      setEditForm({
+        hoten: driverData.userInfo?.hoten || "",
+        sodienthoai: driverData.userInfo?.sodienthoai || "",
+        email: driverData.userInfo?.email || "",
+        // 2. XÓA 'matkhau' khỏi logic khởi tạo
+        kinhnghiem: driverData.kinhnghiem || 0,
+        mabang: driverData.mabang || "",
+      });
+
+    } catch (err) {
+      console.error("Lỗi tải thông tin tài xế:", err);
+      toast.error("Không thể tải thông tin chi tiết tài xế!");
+    }
+  };
+
+  useEffect(() => {
+    fetchDriverData();
+  }, [userId]);
+
+  // ------------------------------------------------
+  // 3. HÀM XỬ LÝ CHỈNH SỬA & CẬP NHẬT
+  // ------------------------------------------------
+
+  // Hàm xử lý thay đổi input trong form chỉnh sửa
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    const newValue = name === 'kinhnghiem' ? Number(value) : value;
+    setEditForm(prev => ({ ...prev, [name]: newValue }));
+  };
+
+  // Hàm xử lý cập nhật thông tin
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (!driverId) {
+      toast.error("Không có ID tài xế để cập nhật.");
+      return;
+    }
+
+    const finalUserId = Number(userId); // userId đã được khai báo ở đầu component
+    if (isNaN(finalUserId)) {
+      toast.error("ID người dùng không hợp lệ.");
+      return;
+    }
+    const payload = {
+      // Thông tin NguoiDung (User)
+      hoten: editForm.hoten.trim(),
+      sodienthoai: editForm.sodienthoai.trim(),
+      email: editForm.email.trim(),
+      // Thông tin TaiXe (Driver)
+      kinhnghiem: Number(editForm.kinhnghiem),
+      mabang: editForm.mabang.trim(),
+      idnguoidung: finalUserId
+    };
+
+    try {
+      const res = await axios.put(`${API_UPDATE_DRIVER}/${driverId}`, payload);
+
+      if (res.status === 200) {
+        toast.success("Cập nhật thông tin thành công!");
+        setIsDialogOpen(false);
+        await fetchDriverData(); // Tải lại dữ liệu mới
+      } else {
+        toast.error(res.data.message || "Cập nhật thất bại!");
       }
-    });
-  };
 
-  const handleSaveProfile = () => {
-    console.log("Cập nhật hồ sơ:", userData);
-    toast.success("Đã cập nhật thông tin cá nhân thành công!");
-    setIsEditing(false);
-    // TODO: gọi API cập nhật hồ sơ
-  };
-
-  const handleSaveEmergencyContact = () => {
-    console.log("Cập nhật liên hệ khẩn cấp:", userData.emergencyContact);
-    toast.success("Đã cập nhật thông tin liên hệ khẩn cấp!");
-    setIsEditingEmergency(false);
-    // TODO: gọi API cập nhật liên hệ khẩn cấp
-  };
-
-  const handlePasswordChange = (e) => {
-    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
-  };
-
-  const handleUpdatePassword = () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error("Mật khẩu xác nhận không khớp!");
-      return;
+    } catch (err) {
+      console.error("Lỗi cập nhật:", err);
+      toast.error(`Lỗi cập nhật: ${err.response?.data?.message || err.message}`);
     }
-    if (passwordData.newPassword.length < 6) {
-      toast.error("Mật khẩu mới phải có ít nhất 6 ký tự!");
-      return;
-    }
-    console.log("Đổi mật khẩu:", passwordData);
-    toast.success("Đã cập nhật mật khẩu thành công!");
-    // TODO: gọi API cập nhật mật khẩu
-    setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
   };
 
-  if (!user) {
+
+  if (!userData) {
     return (
-      <MainLayout>
-        <div className="text-center py-20 text-gray-500">
-          Không có thông tin người dùng.
-        </div>
-      </MainLayout>
+      <div className="text-center py-20">
+        {userId ? "Đang tải thông tin..." : "Vui lòng đăng nhập lại để lấy ID người dùng."}
+      </div>
     );
   }
 
-  // Tính số năm làm việc
-  const calculateWorkYears = (joinDate) => {
-    if (!joinDate) return 0;
-    const join = new Date(joinDate);
-    const now = new Date();
-    const years = now.getFullYear() - join.getFullYear();
-    return years;
-  };
-
-  const workYears = calculateWorkYears(userData.joinDate);
+  const { idtaixe, mabang, kinhnghiem, userInfo } = userData;
+  const fullName = userInfo?.hoten || "Tài xế";
 
   return (
-      <div className="space-y-6">
-        {/* === HEADER THÔNG TIN TÀI XẾ === */}
-        <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-              {/* Avatar */}
-              <Avatar className="h-32 w-32 border-4 border-white shadow-xl">
-                <AvatarImage src={userData.avatarUrl} alt={userData.name} />
-                <AvatarFallback className="text-4xl bg-white/20 text-white backdrop-blur-sm">
-                  {userData.name ? userData.name.slice(0, 2).toUpperCase() : "??"}
-                </AvatarFallback>
-              </Avatar>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
 
-              {/* Thông tin cơ bản */}
-              <div className="flex-1 text-center md:text-left">
-                <h1 className="text-3xl font-bold mb-2">{userData.name}</h1>
-                <div className="flex flex-wrap gap-3 justify-center md:justify-start mb-4">
-                  <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm">
-                    <CreditCard className="h-4 w-4" />
-                    <span className="text-sm font-medium">{userData.driverCode}</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm">
-                    <Shield className="h-4 w-4" />
-                    <span className="text-sm font-medium">{roleMap[userData.role] || "Tài xế"}</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-green-500/40 px-3 py-1 rounded-full backdrop-blur-sm">
-                    <span className="text-sm font-medium">● {userData.status}</span>
-                  </div>
-                </div>
-                
-                {/* Thống kê nhanh */}
-                <div className="grid grid-cols-3 gap-4 mt-6">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <BusFront className="h-6 w-6 mx-auto mb-1" />
-                    <p className="text-2xl font-bold">{user.totalTrips || 0}</p>
-                    <p className="text-xs text-blue-100">Chuyến đi</p>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <Clock className="h-6 w-6 mx-auto mb-1" />
-                    <p className="text-2xl font-bold">{userData.experienceYears}</p>
-                    <p className="text-xs text-blue-100">Năm KN</p>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <Shield className="h-6 w-6 mx-auto mb-1" />
-                    <p className="text-2xl font-bold">{user.safetyRating || 0}</p>
-                    <p className="text-xs text-blue-100">Điểm an toàn</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Avatar className="h-32 w-32 border-4 border-white shadow-xl">
+              <AvatarImage src="" alt={fullName} />
+              <AvatarFallback className="text-4xl bg-white/20 text-white">
+                {fullName?.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
 
-        {/* === Thông tin cá nhân === */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <User className="h-5 w-5 text-blue-600" /> Thông tin Cá nhân
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField
-                  id="name"
-                  name="name"
-                  label="Họ và Tên"
-                  value={userData.name}
-                  onChange={handleUserChange}
-                  disabled={!isEditing}
-                  icon={User}
-                />
-                <InputField
-                  id="phone"
-                  name="phone"
-                  label="Số Điện thoại"
-                  value={userData.phone}
-                  onChange={handleUserChange}
-                  disabled={!isEditing}
-                  icon={Phone}
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField
-                  id="email"
-                  name="email"
-                  label="Email"
-                  value={userData.email}
-                  disabled
-                  icon={Mail}
-                />
-                <InputField
-                  id="organization"
-                  name="organization"
-                  label="Tổ chức"
-                  value={userData.organization}
-                  disabled
-                  icon={Building}
-                />
-              </div>
+            <div className="flex-1 text-center md:text-left">
+              <div className="flex justify-between items-start">
+                <h1 className="text-3xl font-bold mb-2">{fullName}</h1>
 
-              <div className="flex justify-end pt-2">
-                {!isEditing ? (
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    variant="outline"
-                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                  >
-                    Chỉnh sửa Thông tin
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button onClick={() => setIsEditing(false)} variant="outline">
-                      Hủy
-                    </Button>
+                {/* NÚT CHỈNH SỬA VÀ DIALOG */}
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
                     <Button
-                      onClick={handleSaveProfile}
-                      className="bg-green-600 hover:bg-green-700"
+                      variant="secondary"
+                      className="bg-white/30 hover:bg-white/50 text-white border border-white"
+                      onClick={syncDataToEditForm} // Đồng bộ dữ liệu mỗi lần mở Dialog
                     >
-                      Lưu thay đổi
+                      <Pencil className="h-4 w-4 mr-2" /> Chỉnh sửa
                     </Button>
-                  </div>
-                )}
+                  </DialogTrigger>
+
+                  <EditDriverDialog
+                    editForm={editForm}
+                    handleEditChange={handleEditChange}
+                    handleUpdate={handleUpdate}
+                  />
+                </Dialog>
+              </div>
+
+              <div className="flex flex-wrap gap-3 mb-3 justify-center md:justify-start">
+                <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full">
+                  <CreditCard className="h-4 w-4" />
+                  <span className="text-sm">{idtaixe}</span>
+                </div>
+                <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full">
+                  <Shield className="h-4 w-4" />
+                  <span className="text-sm">{roleMap[2]}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="bg-white/10 p-3 rounded-lg text-center">
+                  <BusFront className="h-6 w-6 mx-auto mb-1" />
+                  <p className="text-2xl font-bold">{userData.totalTrips || 0}</p>
+                  <p className="text-xs">Chuyến đi</p>
+                </div>
+                <div className="bg-white/10 p-3 rounded-lg text-center">
+                  <Clock className="h-6 w-6 mx-auto mb-1" />
+                  <p className="text-2xl font-bold">{kinhnghiem || 0}</p>
+                  <p className="text-xs">Năm KN</p>
+                </div>
+                <div className="bg-white/10 p-3 rounded-lg text-center">
+                  <Shield className="h-6 w-6 mx-auto mb-1" />
+                  <p className="text-2xl font-bold">{userData.safetyRating || 0}</p>
+                  <p className="text-xs">Điểm an toàn</p>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* === Thông tin Giấy phép & Nghề nghiệp === */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <CreditCard className="h-5 w-5 text-indigo-600" /> Thông tin Giấy phép & Nghề nghiệp
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Cột trái */}
-              <div className="space-y-4">
-                <InfoRow 
-                  label="Mã Tài xế" 
-                  value={userData.driverCode}
-                  icon={CreditCard}
-                />
-                <InfoRow 
-                  label="Mã giấy phép Lái xe" 
-                  value={userData.licenseNumber}
-                  icon={Shield}
-                />
-                
-              </div>
+      {/* THÔNG TIN CÁ NHÂN */}
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <User className="h-5 w-5 text-blue-600" /> Thông tin Cá nhân
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoField label="Họ và tên" value={userInfo?.hoten} icon={User} />
+            <InfoField label="SDT" value={userInfo?.sodienthoai} icon={Phone} />
+            <InfoField label="Email" value={userInfo?.email} icon={Mail} />
+            <InfoField label="Số năm kinh nghiệm" value={kinhnghiem} icon={Clock} />
+          </div>
+        </CardContent>
+      </Card>
 
-              {/* Cột phải */}
-              <div className="space-y-4">
-                <InfoRow 
-                  label="Số năm Kinh nghiệm" 
-                  value={`${userData.experienceYears} năm`}
-                  icon={Clock}
-                />
-                <InfoRow 
-                  label="Ngày hết hạn GPLX" 
-                  value={new Date(userData.licenseExpiry).toLocaleDateString('vi-VN')}
-                  icon={Calendar}
-                  status={"valid"}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-  );
-}
+      {/* GPLX */}
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <CreditCard className="h-5 w-5 text-indigo-600" /> Thông tin Giấy phép
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <InfoField
+              label="Số GPLX"
+              value={mabang || "Chưa cập nhật"}
+              icon={Shield}
+            />
+            <InfoField
+              label="Hạn GPLX"
+              value={userData.hangplx || "Không có"}
+              icon={Calendar}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-// === Component con: Input có icon và label ===
-function InputField({ id, name, label, icon: Icon, className, ...props }) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="text-sm font-medium text-gray-700">{label}</Label>
-      <div className="relative">
-        {Icon && (
-          <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        )}
-        <input
-          id={id}
-          name={name}
-          className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${Icon ? "pl-10" : ""} ${className}`}
-          {...props}
-        />
-      </div>
     </div>
   );
 }
 
-// === Component hiển thị thông tin dạng hàng ===
-function InfoRow({ label, value, icon: Icon, status }) {
+function InfoField({ label, value, icon: Icon }) {
   return (
     <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-      {Icon && (
-        <div className="mt-0.5">
-          <Icon className="h-5 w-5 text-gray-600" />
-        </div>
-      )}
-      <div className="flex-1">
-        <p className="text-sm text-gray-600 mb-1">{label}</p>
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-gray-900">{value}</p>
-          {status === "valid" && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-              Còn hạn
-            </span>
-          )}
-        </div>
+      {Icon && <Icon className="h-5 w-5 text-gray-600 mt-1" />}
+      <div>
+        <p className="text-sm text-gray-600">{label}</p>
+        <p className="font-semibold">{value}</p>
       </div>
     </div>
   );

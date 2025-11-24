@@ -101,6 +101,11 @@ export default function LoginPage() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
+      // Chỉ lưu idnguoidung nếu vaitro là 1 (Tài xế)
+      if (data.user.vaitro === 1) {
+        localStorage.setItem("idnguoidung", data.user.id); 
+      }
+
       // Điều hướng theo role (vaitro)
       // 0: Admin, 1: Tài xế, 2: Phụ huynh
       setTimeout(() => {

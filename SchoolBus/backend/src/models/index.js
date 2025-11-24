@@ -91,7 +91,11 @@ LichChuyen.belongsTo(TuyenDuong, {
     as: "tuyenDuongInfo" // Dùng alias riêng để tránh trùng với DiemDung.belongsTo(TuyenDuong)
 });
 
-LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
+LichChuyen.belongsTo(XeBuyt, { 
+    foreignKey: "idxebuyt",
+    as: "busInfo" 
+}); 
+// LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
 LichChuyen.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 
 DangKyChuyen.belongsTo(HocSinh, { foreignKey: "mahocsinh" });
