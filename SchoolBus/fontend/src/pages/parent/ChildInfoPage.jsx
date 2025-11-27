@@ -172,11 +172,11 @@ export default function ChildInfo() {
                 name: child.hoten,
                 grade: child.lop,
                 gender: child.gioitinh,
-                dob: child.namsinh ? `${child.namsinh}-01-01` : null, // Convert namsinh thành date
+                dob: child.namsinh,
                 studentId: child.mahocsinh,
-                school: child.truonghoc || 'Chưa cập nhật',
                 avatar: child.anhdaidien || `https://i.pravatar.cc/150?u=${child.mahocsinh}`,
             }));
+            console.log('🔄 Danh sách học sinh đã map:', mappedChildren);
             
             setChildren(mappedChildren);
             
@@ -369,7 +369,7 @@ export default function ChildInfo() {
                                     >
                                         <CardHeader className="flex flex-row items-center space-x-4 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-b rounded-t-xl">
                                             <Avatar className="h-16 w-16 border-2 border-blue-500 shadow-md">
-                                                <AvatarImage src={child.avatar} alt={child.name} />
+                                                <AvatarImage src={`http://localhost:5001/uploads/avatars/${child.avatar}`}alt={child.name} />
                                                 <AvatarFallback className="bg-blue-500 text-white font-semibold text-lg">
                                                     {child.name?.[0] || '?'}
                                                 </AvatarFallback>
@@ -399,7 +399,7 @@ export default function ChildInfo() {
                                                 <InfoItem 
                                                     icon={Calendar} 
                                                     label="Năm sinh" 
-                                                    value={child.dob ? new Date(child.dob).getFullYear() : 'N/A'} 
+                                                    value= {child.dob } 
                                                 />
                                                 <InfoItem 
                                                     icon={User} 
@@ -411,13 +411,7 @@ export default function ChildInfo() {
                                                             : 'text-pink-500 font-medium'
                                                     }
                                                 />
-                                                {child.school && (
-                                                    <InfoItem 
-                                                        icon={School} 
-                                                        label="Trường học" 
-                                                        value={child.school} 
-                                                    />
-                                                )}
+                                                
                                             </div>
                                         </CardContent>
                                     </Card>

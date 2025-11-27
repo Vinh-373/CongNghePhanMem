@@ -24,12 +24,8 @@ export default (sequelize, DataTypes) => {
         allowNull: false,
         comment: 'Giờ xe khởi hành',
       },
-      // Loại chuyến: Đón hoặc Trả
-      loaichuyen: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        comment: 'Loại chuyến: Đón hoặc Trả',
-      },
+      
+      
       // Trạng thái: 0=Chưa chạy, 1=Đang chạy, 2=Hoàn thành, 3=Trễ
       trangthai: {
         type: DataTypes.INTEGER,

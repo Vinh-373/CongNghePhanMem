@@ -1,6 +1,6 @@
 import {
   Home, Bus, UserCheck, MapPin, Users, Calendar, MessageCircle, Settings, UsersRound, UserPen,
-   CalendarClock, Bell, User, MessageSquare,Route
+   CalendarClock, Bell, User, MessageSquare,Route, BookCheck
 } from "lucide-react";
 
 // Mã vai trò dựa trên bảng 'nguoidung' trong schoolbus.sql: 0=Admin, 1=Tài xế, 2=Phụ huynh
@@ -18,6 +18,7 @@ export const ADMIN_MENU = [
   { icon: Users, label: "Quản lý học sinh", href: "/admin/schoolbus/students" },
   { icon: UsersRound, label: "Quản lý phụ huynh", href: "/admin/schoolbus/parents" },
   { icon: Calendar, label: "Quản lý lịch trình", href: "/admin/schoolbus/schedules" },
+  { icon: BookCheck, label: "QL đăng ký điểm đón", href: "/admin/schoolbus/pickup-registrations" },
   { icon: MessageCircle, label: "Quản lý thông báo", href: "/admin/schoolbus/notification" },
   { icon: UserPen, label: "Thông tin tài khoản", href: "/admin/schoolbus/account" },
   { icon: Settings, label: "Cài đặt hệ thống", href: "/admin/schoolbus/settings" },

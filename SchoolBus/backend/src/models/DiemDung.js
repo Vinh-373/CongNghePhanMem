@@ -14,14 +14,7 @@ export default (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    idtuyenduong: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    thutu: {
-      type: DataTypes.TINYINT,
-      allowNull: true,
-    },
+    
     kinhdo: {
       type: DataTypes.DOUBLE,
       allowNull: true,

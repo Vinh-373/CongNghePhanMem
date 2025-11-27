@@ -19,6 +19,7 @@ import ParentAccount from "./pages/parent/AccountPage.jsx";
 import PointsRegisterPage from "./pages/parent/RegisterPointsPage.jsx";
 import DriverDashboard from "./pages/driver/DashboardPage.jsx";
 import PickupPointsPage from "./pages/admin/PickupPointsPage.jsx";
+import RegisterPointPage from "./pages/admin/RegisterPointPage.jsx";
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
             <Route path="parents" element={<ParentsPage />} />
             <Route path="account" element={<AccountPage />} />
             <Route path="pickup-points" element={<PickupPointsPage />} />
+            <Route path="pickup-registrations" element={<RegisterPointPage />} />
           </Route>
           <Route path="/parent/schoolbus" element={<MainLayout />}>
             <Route path="dashboard" element={<ParentDashboardPage />} />

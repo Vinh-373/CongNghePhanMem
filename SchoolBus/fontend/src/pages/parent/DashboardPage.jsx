@@ -17,7 +17,8 @@ import {
   XCircle,
   Home,
   Map,
-  Calendar, // Icon mới
+  Calendar,
+  Loader2,
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -31,25 +32,24 @@ import {
 import { Badge } from "@/components/ui/badge";
 import GoogleMapDisplay from "@/components/Map/GoogleMapDisplay";
 
-// --- COMPONENT MỚI: Đồng hồ và Ngày tháng ---
+// --- COMPONENT: Đồng hồ và Ngày tháng ---
 const ClockDisplay = () => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentDateTime(new Date());
-    }, 1000); // Cập nhật mỗi giây
-
-    // Xóa interval khi component unmount
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Định dạng ngày tháng
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const formattedDate = currentDateTime.toLocaleDateString('vi-VN', dateOptions);
-
-  // Định dạng thời gian
-  const formattedTime = currentDateTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const formattedTime = currentDateTime.toLocaleTimeString('vi-VN', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit' 
+  });
 
   return (
     <div className="flex flex-col items-end text-right text-gray-700">
@@ -64,99 +64,256 @@ const ClockDisplay = () => {
     </div>
   );
 };
-// ---------------------------------------------
-
 
 export default function ParentDashboardPage() {
   const [selectedTrip, setSelectedTrip] = useState("go");
+  const [scheduleData, setScheduleData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Định nghĩa trường học
-  const school = { lat: 10.788233, lng: 106.703972 };
+  // Fetch dữ liệu từ API
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          throw new Error('Chưa có token đăng nhập');
+        }
 
-  // --- 1. Danh sách TẤT CẢ các điểm (bao gồm cả điểm đầu và điểm cuối) ---
-  const fullRouteGo = [
-    { lat: 10.802850, lng: 106.710282, name: "Điểm xuất phát" },
-    { lat: 10.799792, lng: 106.711077, name: "Cổng chợ An Đông" },
-    { lat: 10.793715, lng: 106.708231, name: "Khu dân cư Nam Long" },
-    { lat: 10.790726, lng: 106.705374, name: "Điểm trung gian" },
-    { lat: 10.788233, lng: 106.703972, name: "Trường Tiểu học Nguyễn Bỉnh Khiêm" },
-  ];
+        const response = await fetch('http://localhost:5001/schoolbus/user/schedules-by-my-children', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-  const fullRouteReturn = [
-    { lat: 10.778000, lng: 106.705000, name: "Trường Tiểu học Hoa Sen" },
-    { lat: 10.776000, lng: 106.702000, name: "Điểm trung gian" },
-    { lat: 10.770000, lng: 106.695000, name: "Khu dân cư Nam Long" },
-    { lat: 10.772500, lng: 106.692000, name: "Cổng chợ An Đông" },
-    { lat: 10.778000, lng: 106.690000, name: "Điểm cuối" },
-  ];
+        if (!response.ok) {
+          throw new Error('Lỗi khi gọi API');
+        }
+        
+        const data = await response.json();
+        console.log('📦 API Response:', data);
+        setScheduleData(data);
+        setLoading(false);
+      } catch (err) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
 
-  // --- 2. Trích xuất Waypoints (chỉ các điểm nằm giữa điểm đầu và điểm cuối) ---
-  const busStopsGo = fullRouteGo.slice(1, fullRouteGo.length - 1);
-  const busStopsReturn = fullRouteReturn.slice(1, fullRouteReturn.length - 1);
+    fetchSchedule();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Đang tải dữ liệu...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center text-red-600">
+              <XCircle className="h-5 w-5 mr-2" />
+              <span className="font-medium">Lỗi: {error}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!scheduleData || !scheduleData.schedules || scheduleData.schedules.length === 0) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6 text-center text-gray-500">
+            Không có lịch trình nào cho hôm nay
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ✅ XỬ LÝ DỮ LIỆU TỪ API
+  const schedules = scheduleData.schedules;
   
-  // Lấy Tọa độ Điểm đón/trả của học sinh (Khu dân cư Nam Long)
-  const studentPickup = { lat: 10.802850, lng:  106.710282 };
-  
-  // Tọa độ điểm bắt đầu/kết thúc
-  const originGo = fullRouteGo[0];
-  const destinationReturn = fullRouteReturn[fullRouteReturn.length - 1];
+  // Tìm chuyến đi (loaituyen = "Đón") và chuyến về (loaituyen = "Trả")
+  const goSchedule = schedules.find(s => s.tuyenDuongInfo?.loaituyen === "Đón");
+  const returnSchedule = schedules.find(s => s.tuyenDuongInfo?.loaituyen === "Trả");
 
-  const tripData = {
-    go: {
-      student: { name: "Nguyễn Trần Thanh Tú", status: "Trên xe" },
-      bus: "79A-12345",
-      driver: {
-        name: "Nguyễn Văn A",
-        phone: "0909123456",
-        exp: "5 năm",
-        avatar: "https://i.pravatar.cc/100?img=21",
-      },
-      route: fullRouteGo, // Dùng fullRoute để hiển thị lịch trình
-      pickupPoint: "Khu dân cư Nam Long – 07:15",
-      schedule: [
-        { time: "06:45", event: "Xe xuất phát", icon: <Bus className="h-4 w-4 text-blue-600" /> },
-        { time: "07:15", event: "Bé đã lên xe", icon: <CheckCircle className="h-4 w-4 text-green-600" /> },
-        { time: "07:30", event: "Đến trường", icon: <CheckCircle className="h-4 w-4 text-green-600" /> },
-      ],
-      notifications: [
-        { id: 1, message: "Xe đang trên đường đến điểm đón", time: "07:10", type: "info" },
-        { id: 2, message: "Đã đến trường an toàn", time: "07:32", type: "success" },
-      ],
-      busPosition: { lat: 10.802850, lng:  106.710282 }, 
-      studentPickup: studentPickup,
-      busStops: busStopsGo, 
-      origin: originGo,
-      destination: school,
-    },
-    return: {
-      student: { name: "Nguyễn Trần Thanh Tú", status: "Chờ xe" },
-      bus: "79B-67890",
-      driver: {
-        name: "Trần Văn B",
-        phone: "0911122233",
-        exp: "3 năm",
-        avatar: "https://i.pravatar.cc/100?img=12",
-      },
-      route: fullRouteReturn, // Dùng fullRoute để hiển thị lịch trình
-      pickupPoint: "Khu dân cư Nam Long – 16:35",
-      schedule: [
-        { time: "16:15", event: "Xe chuẩn bị tại trường", icon: <Bus className="h-4 w-4 text-orange-500" /> },
-        { time: "16:25", event: "Học sinh ra khu vực tập trung", icon: <CheckCircle className="h-4 w-4 text-green-600" /> },
-        { time: "16:35", event: "Dự kiến đến điểm trả", icon: <Bus className="h-4 w-4 text-blue-600" /> },
-      ],
-      notifications: [
-        { id: 1, message: "Xe sẵn sàng tại cổng trường", time: "16:20", type: "info" },
-        { id: 2, message: "Dự kiến khởi hành trong 10 phút", time: "16:25", type: "warning" },
-      ],
-      busPosition: { lat: 10.802850, lng:  106.710282 }, 
-      studentPickup: studentPickup,
-      busStops: busStopsReturn,
-      origin: school,
-      destination: destinationReturn,
-    },
+  // Nếu không có chuyến nào
+  if (!goSchedule && !returnSchedule) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6 text-center text-gray-500">
+            Không có lịch trình đón/trả hôm nay
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Định nghĩa trường học (tọa độ cố định)
+  const school = { 
+    lat: 10.788233, 
+    lng: 106.703972, 
+    label: "Trường Tiểu học Nguyễn Bỉnh Khiêm" 
+  };
+  
+  // Hàm helper để map trạng thái
+  const getStudentStatus = (statusText) => {
+    if (!statusText) return "Chưa cập nhật";
+    if (statusText.includes("Đã lên xe") || statusText.includes("Đang trên xe")) return "Trên xe";
+    if (statusText.includes("Chưa")) return "Chờ xe";
+    if (statusText.includes("Đã xuống xe") || statusText.includes("Đã về nhà")) return "Đã về";
+    return statusText;
   };
 
-  const trip = tripData[selectedTrip];
+  // Hàm helper để tạo route từ API
+  const createRouteFromSchedule = (schedule, isGoTrip = true) => {
+    if (!schedule) return null;
+
+    const routeInfo = schedule.tuyenDuongInfo;
+    const diemDung = routeInfo?.diemDungDetails || [];
+    const children = schedule.myChildren || [];
+    
+    // ✅ THAY ĐỔI: Lấy trạng thái của TẤT CẢ học sinh
+    const studentStatusList = children.map(child => ({
+      id: child.idhocsinh,
+      name: child.hoten,
+      avatar: child.userInfo?.anhdaidien || "",
+      statusText: child.trangThaiDonTra?.trangthai_text || "Chưa cập nhật",
+      status: getStudentStatus(child.trangThaiDonTra?.trangthai_text || "Chưa cập nhật"),
+    }));
+    
+    // Lấy tên tất cả học sinh (dùng cho tiêu đề Card nếu cần)
+    const studentNames = children.map(c => c.hoten).join(", ") || "Chưa có thông tin";
+    
+    // Tạo route points từ điểm dừng
+    const routePoints = diemDung.map(stop => ({
+      lat: parseFloat(stop.vido),
+      lng: parseFloat(stop.kinhdo),
+      label: stop.tendiemdon
+    }));
+
+    // Thêm điểm đầu/cuối
+    let fullRoute;
+    if (isGoTrip) {
+      // Chuyến đi: Điểm dừng đầu tiên -> ... -> Trường
+      fullRoute = [...routePoints, school];
+    } else {
+      // Chuyến về: Trường -> ... -> Điểm dừng cuối
+      fullRoute = [school, ...routePoints];
+    }
+
+    // Tìm điểm đón của học sinh
+    let studentPickup = null;
+    if (children.length > 0 && children[0].iddiemdon) {
+      const pickupPoint = diemDung.find(stop => stop.iddiemdung === children[0].iddiemdon);
+      if (pickupPoint) {
+        studentPickup = {
+          lat: parseFloat(pickupPoint.vido),
+          lng: parseFloat(pickupPoint.kinhdo),
+          label: pickupPoint.tendiemdon,
+        };
+      }
+    }
+
+    // ✅ Vị trí xe thực từ API
+    const busPosition = schedule.xebuyt?.vitrixe 
+      ? { 
+          lat: parseFloat(schedule.xebuyt.vitrixe.vido), 
+          lng: parseFloat(schedule.xebuyt.vitrixe.kinhdo) 
+        }
+      : (isGoTrip 
+          ? (routePoints.length > 0 ? { lat: routePoints[0].lat, lng: routePoints[0].lng } : { lat: school.lat, lng: school.lng }) // Giả định vị trí đầu tuyến
+          : { lat: school.lat, lng: school.lng }
+        );
+
+    return {
+      // Dữ liệu tổng quan
+      student: { 
+        name: studentNames, 
+        status: studentStatusList.length > 0 ? studentStatusList[0].status : "N/A"
+      },
+      // ✅ Dữ liệu chi tiết từng học sinh
+      studentList: studentStatusList, 
+      bus: schedule.xebuyt?.bienso || "N/A",
+      driver: {
+        name: schedule.taixe?.userInfo?.hoten || "N/A",
+        phone: schedule.taixe?.userInfo?.sodienthoai || "N/A",
+        exp: schedule.taixe?.kinhnghiem ? `${schedule.taixe.kinhnghiem} năm` : "N/A",
+        avatar: schedule.taixe?.userInfo?.anhdaidien || "",
+      },
+      route: fullRoute,
+      pickupPoint: studentPickup 
+        ? `${studentPickup.label} – ${schedule.giobatdau.substring(0, 5)}` 
+        : "Chưa có thông tin điểm đón",
+      schedule: [
+        { 
+          time: schedule.giobatdau.substring(0, 5), 
+          event: isGoTrip ? "Xe xuất phát" : "Xe khởi hành từ trường", 
+          icon: <Bus className="h-4 w-4 text-blue-600" /> 
+        },
+        { 
+          time: "??:??", 
+          event: isGoTrip ? "Bé đã lên xe" : "Bé đã xuống xe", 
+          icon: <CheckCircle className="h-4 w-4 text-green-600" /> 
+        },
+        { 
+          time: "??:??", 
+          event: isGoTrip ? "Đến trường" : "Về đến nhà", 
+          icon: <CheckCircle className="h-4 w-4 text-green-600" /> 
+        },
+      ],
+      notifications: [
+        { 
+          id: 1, 
+          message: schedule.trangthai === 1 
+            ? "Xe đang trên đường" 
+            : "Xe chưa khởi hành", 
+          time: schedule.giobatdau.substring(0, 5), 
+          type: schedule.trangthai === 1 ? "success" : "info" 
+        },
+      ],
+      busPosition: busPosition,
+      studentPickup: studentPickup,
+      busStops: fullRoute.slice(1, fullRoute.length - 1),
+      origin: fullRoute[0],
+      destination: fullRoute[fullRoute.length - 1],
+      routeName: routeInfo?.tentuyen || "N/A",
+    };
+  };
+
+  // Tạo dữ liệu cho 2 chuyến
+  const tripData = {
+    go: goSchedule ? createRouteFromSchedule(goSchedule, true) : null,
+    return: returnSchedule ? createRouteFromSchedule(returnSchedule, false) : null,
+  };
+
+  // Nếu không có chuyến được chọn, chọn chuyến có sẵn
+  const currentSelectedTrip = tripData[selectedTrip] || tripData.go || tripData.return;
+
+  if (!currentSelectedTrip) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6 text-center text-gray-500">
+            Không có dữ liệu chuyến đi
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const trip = currentSelectedTrip;
 
   const notifBadge = (type) => {
     if (type === "success") return <Badge className="bg-green-100 text-green-800">An toàn</Badge>;
@@ -166,59 +323,80 @@ export default function ParentDashboardPage() {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-inter space-y-6">
-      
-      {/* HEADER: Chứa nút chuyển đổi và Đồng hồ */}
+      {/* HEADER */}
       <div className="flex items-start justify-between">
         {/* Toggle buttons */}
         <div className="flex items-center gap-3 pt-2">
-          <button
-            onClick={() => setSelectedTrip("go")}
-            className={`px-4 py-2 rounded-full font-medium transition flex items-center ${
-              selectedTrip === "go"
-                ? "bg-blue-600 text-white shadow"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            <Map className="inline h-4 w-4 mr-2"/> Chuyến đi
-          </button>
+          {tripData.go && (
+            <button
+              onClick={() => setSelectedTrip("go")}
+              className={`px-4 py-2 rounded-full font-medium transition flex items-center ${
+                selectedTrip === "go"
+                  ? "bg-blue-600 text-white shadow"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              <Map className="inline h-4 w-4 mr-2" /> Chuyến đi
+            </button>
+          )}
 
-          <button
-            onClick={() => setSelectedTrip("return")}
-            className={`px-4 py-2 rounded-full font-medium transition flex items-center ${
-              selectedTrip === "return"
-                ? "bg-orange-500 text-white shadow"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            <Home className="inline h-4 w-4 mr-2"/> Chuyến về
-          </button>
+          {tripData.return && (
+            <button
+              onClick={() => setSelectedTrip("return")}
+              className={`px-4 py-2 rounded-full font-medium transition flex items-center ${
+                selectedTrip === "return"
+                  ? "bg-orange-500 text-white shadow"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              <Home className="inline h-4 w-4 mr-2" /> Chuyến về
+            </button>
+          )}
         </div>
 
-        {/* CLOCK DISPLAY */}
         <ClockDisplay />
       </div>
 
       {/* Top 3 cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Student card */}
+        {/* ✅ THAY ĐỔI: Card trạng thái TỪNG học sinh */}
         <Card className="shadow-md">
           <CardHeader className="flex items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Trạng thái học sinh</CardTitle>
             <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div className="text-lg font-semibold text-gray-900">{trip.student.name}</div>
-            <div
-              className={`text-sm px-3 py-1 rounded-full ${
-                trip.student.status === "Vắng"
-                  ? "bg-red-100 text-red-600"
-                  : trip.student.status === "Chờ xe"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-green-100 text-green-800"
-              }`}
-            >
-              {trip.student.status}
-            </div>
+          <CardContent className="space-y-3 max-h-[140px] overflow-y-auto">
+            {trip.studentList && trip.studentList.length > 0 ? (
+              trip.studentList.map((student) => (
+                <div key={student.id} className="flex items-center justify-between pb-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src={student.avatar ? `http://localhost:5001${student.avatar}` : undefined}
+                        alt={student.name}
+                      />
+                      <AvatarFallback className="text-sm">
+                        {student.name.split(' ').pop().charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="text-md font-semibold text-gray-900">{student.name}</div>
+                  </div>
+                  <div
+                    className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      student.status === "Vắng"
+                        ? "bg-red-100 text-red-600"
+                        : student.status.includes("Chờ")
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
+                    }`}
+                  >
+                    {student.status}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-sm text-gray-500">Không có thông tin học sinh</div>
+            )}
           </CardContent>
         </Card>
 
@@ -230,9 +408,7 @@ export default function ParentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-gray-900">{trip.bus}</div>
-            <div className="text-sm text-gray-500 mt-1">
-              {trip.route[0].name} → {trip.route[trip.route.length - 1].name}
-            </div>
+            <div className="text-sm text-gray-500 mt-1">{trip.routeName}</div>
           </CardContent>
         </Card>
 
@@ -244,7 +420,10 @@ export default function ParentDashboardPage() {
           </CardHeader>
           <CardContent className="flex items-center gap-3">
             <Avatar>
-              <AvatarImage src={trip.driver.avatar} alt={trip.driver.name} />
+              <AvatarImage
+                src={trip.driver.avatar ? `http://localhost:5001${trip.driver.avatar}` : undefined}
+                alt={trip.driver.name}
+              />
               <AvatarFallback>{trip.driver.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div>
@@ -262,16 +441,29 @@ export default function ParentDashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* MAP COMPONENT */}
         <Card className="md:col-span-2 h-[420px] p-0 overflow-hidden shadow-2xl">
-          <GoogleMapDisplay 
-            busPosition={trip.busPosition} 
-            studentPickup={trip.studentPickup}
-            busStops={trip.busStops}
-            school={school} // Trường học
-            origin={trip.origin} // Điểm xuất phát (được thêm vào)
-            destination={trip.destination} // Điểm kết thúc (được thêm vào)
-            zoom={14}
-            // Prop apiKey để đảm bảo GoogleMapDisplay nhận key
-            apiKey="AIzaSyA_JStH-ku5M_jeUjakhpWBT1m7P6_s-w4" 
+          <GoogleMapDisplay
+            routes={[
+              {
+                id: "main-route",
+                name: trip.routeName,
+                color: selectedTrip === "go" ? "#2563eb" : "#f97316",
+                dotColor: selectedTrip === "go" 
+                  ? "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+                  : "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+                stops: trip.route
+              }
+            ]}
+            buses={[
+              {
+                id: "bus-1",
+                position: trip.busPosition,
+                label: `Xe ${trip.bus}`,
+                icon: "https://img.icons8.com/color/48/bus.png"
+              }
+            ]}
+            school={school}
+            zoom={13}
+            apiKey="AIzaSyA_JStH-ku5M_jeUjakhpWBT1m7P6_s-w4"
           />
         </Card>
 
@@ -280,26 +472,26 @@ export default function ParentDashboardPage() {
           <CardHeader>
             <CardTitle className="text-sm font-medium">Danh sách điểm dừng</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 max-h-[360px] overflow-y-auto">
             {trip.route.map((r, i) => (
               <div key={i} className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2">
-                  {r.name.includes("Trường") 
-                    ? <MapPin className="h-4 w-4 text-yellow-600" />
-                    : r.name === trip.pickupPoint.split(" – ")[0]
-                    ? <Home className="h-4 w-4 text-green-600" />
-                    : <MapPin className="h-4 w-4 text-blue-500" />
-                  }
-                  <div className="text-gray-800 text-sm">{r.name}</div>
+                  {r.label.includes("Trường") ? (
+                    <MapPin className="h-4 w-4 text-yellow-600" />
+                  ) : (
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                  )}
+                  <div className="text-gray-800 text-sm">{r.label}</div>
                 </div>
-                <div className="text-gray-500 text-xs font-medium">{trip.route[i].time}</div>
               </div>
             ))}
 
             <div className="mt-4 pt-3 border-t">
-              <div className="text-xs text-gray-500 mb-1">Điểm đón/trả của học sinh</div>
+              <div className="text-xs text-gray-500 mb-1">
+                Điểm {selectedTrip === "go" ? "đón" : "trả"} của học sinh
+              </div>
               <div className="font-semibold text-gray-900 text-sm flex items-center gap-2">
-                <Home className="h-4 w-4 text-green-600" />
+                <MapPin className="h-4 w-4 text-green-500" />
                 {trip.pickupPoint}
               </div>
             </div>
@@ -328,7 +520,10 @@ export default function ParentDashboardPage() {
                 {trip.schedule.map((s, idx) => (
                   <TableRow key={idx}>
                     <TableCell className="font-medium">{s.time}</TableCell>
-                    <TableCell className="flex items-center gap-2">{s.icon}{s.event}</TableCell>
+                    <TableCell className="flex items-center gap-2">
+                      {s.icon}
+                      {s.event}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -340,7 +535,9 @@ export default function ParentDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2"><Bell className="h-5 w-5" /> Thông báo</div>
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5" /> Thông báo
+              </div>
               <Button variant="outline" size="sm">Xem tất cả</Button>
             </CardTitle>
           </CardHeader>

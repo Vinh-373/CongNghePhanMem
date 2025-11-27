@@ -51,8 +51,8 @@ export default function PickupPointsPage() {
     const PICKUP_POINT_FIELDS = [
         { name: 'tendiemdon', label: 'Tên điểm đón', type: 'text', placeholder: 'Điểm đón A', required: true },
         { name: 'diachi', label: 'Địa chỉ', type: 'text', placeholder: '123 Đường ABC, Quận 1, TP.HCM', required: true },
-        { name: 'idtuyenduong', label: 'ID Tuyến Đường', type: 'number', placeholder: '1', required: true },
-        { name: 'thutu', label: 'Thứ tự', type: 'number', placeholder: '1', required: true },
+       
+        
         { name: 'kinhdo', label: 'Kinh độ', type: 'text', placeholder: '106.6297', required: false },
         { name: 'vido', label: 'Vĩ độ', type: 'text', placeholder: '10.8231', required: false },
         { name: 'trangthai', label: 'Trạng thái', type: 'number', placeholder: '1', defaultValue: 1, min: 0, max: 1, required: true },
@@ -63,30 +63,11 @@ export default function PickupPointsPage() {
         try {
             const res = await axios.post("http://localhost:5001/schoolbus/admin/add-pickup-point", formData);
             toast.success("✅ Thêm điểm đón thành công!");
-
-            // Lấy dữ liệu điểm mới
-            const newPoint = res.data.newPickupPoint;
-
-            // *****************************************************************
-            // FIX: Chuẩn hóa dữ liệu mới để khớp với cấu trúc trong state (key chữ thường)
-            // *****************************************************************
-            const standardizedPoint = {
-                // Đảm bảo tất cả các key cần thiết trong bảng đều có mặt và đúng dạng
-                iddiemdung: newPoint.iddiemdung || newPoint.IdDiemDung || Date.now(), // Sử dụng IdDiemDung (nếu có) hoặc tạo ID tạm
-                tendiemdon: newPoint.tendiemdon || newPoint.TenDiemDon || '',
-                diachi: newPoint.diachi || newPoint.DiaChi || '',
-                idtuyenduong: newPoint.idtuyenduong || newPoint.IdTuyenDuong,
-                thutu: newPoint.thutu || newPoint.ThuTu,
-                kinhdo: newPoint.kinhdo || newPoint.KinhDo,
-                vido: newPoint.vido || newPoint.ViDo,
-                // Đảm bảo trangthai là số
-                trangthai: newPoint.trangthai ?? newPoint.TrangThai ?? 1, 
-                // Cực kỳ quan trọng: Tuyến đường phải tồn tại để tránh lỗi Optional Chaining
-                tuyenduong: newPoint.tuyenduong || newPoint.TuyenDuong || { tentuyen: 'Chưa có tuyến' },
-            };
+            console.log("🚀 Điểm đón mới:", res.data);
+           
             
             // Cập nhật lại danh sách điểm đón
-            setPoints((prevPoints) => [...prevPoints, standardizedPoint]);
+            setPoints((prevPoints) => [...prevPoints, res.data.newPoint]);
             setIsDialogOpen(false);
         } catch (err) {
             console.error("❌ Lỗi thêm điểm đón:", err);
@@ -219,10 +200,11 @@ export default function PickupPointsPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead>Mã</TableHead>
                                 <TableHead>Tên Điểm Đón</TableHead>
                                 <TableHead>Địa Chỉ Chi Tiết</TableHead>
                                 <TableHead>Tọa Độ</TableHead>
-                                <TableHead>Tuyến</TableHead>
+                          
                                 <TableHead>Trạng Thái</TableHead>
                                 <TableHead className="text-right">Hành động</TableHead>
                             </TableRow>
@@ -233,16 +215,13 @@ export default function PickupPointsPage() {
                                 filteredPoints.map((point) => (
                                     // SỬ DỤNG KEY CHỮ THƯỜNG. DÙNG iddiemdung LÀM KEY
                                     <TableRow key={point.iddiemdung}> 
+                                        <TableCell className="font-medium">{point.iddiemdung}</TableCell>
                                         <TableCell className="font-medium">{point.tendiemdon}</TableCell>
                                         <TableCell className="text-sm">{point.diachi}</TableCell>
                                         <TableCell className="text-xs">
                                             K: {point.kinhdo || 'N/A'} <br/> V: {point.vido || 'N/A'}
                                         </TableCell>
-                                        {/* FIX: Sử dụng Optional Chaining (?) để tránh lỗi nếu tuyenduong là null/undefined */}
-                                        <TableCell className="text-xs">
-                                            Tên: {point.tuyenduong?.tentuyen || 'Chưa gán'} <br/> 
-                                            Stt: {point.thutu}
-                                        </TableCell>
+                                        
                                         <TableCell>{getStatusBadge(point.trangthai)}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">

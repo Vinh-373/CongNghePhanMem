@@ -10,7 +10,7 @@ import TuyenDuongModel from "./TuyenDuong.js";
 import DiemDungModel from "./DiemDung.js";
 import XeBuytModel from "./XeBuyt.js";
 import LichChuyenModel from "./LichChuyen.js";
-import DangKyChuyenModel from "./DangKyChuyen.js";
+import DangKyDiemDonModel from "./DangKyDiemDon.js";
 import TrangThaiDonTraModel from "./TrangThaiDonTra.js";
 import ViTriXeModel from "./ViTriXe.js";
 import ThongBaoModel from "./ThongBao.js";
@@ -25,7 +25,7 @@ const TuyenDuong = TuyenDuongModel(sequelize, DataTypes);
 const DiemDung = DiemDungModel(sequelize, DataTypes);
 const XeBuyt = XeBuytModel(sequelize, DataTypes);
 const LichChuyen = LichChuyenModel(sequelize, DataTypes);
-const DangKyChuyen = DangKyChuyenModel(sequelize, DataTypes);
+const DangKyDiemDon = DangKyDiemDonModel(sequelize, DataTypes);
 const TrangThaiDonTra = TrangThaiDonTraModel(sequelize, DataTypes);
 const ViTriXe = ViTriXeModel(sequelize, DataTypes);
 const ThongBao = ThongBaoModel(sequelize, DataTypes);
@@ -51,17 +51,9 @@ PhuHuynh.hasMany(HocSinh, {
     as: "hocSinhs" 
 });
 
-// TuyenDuong có nhiều DiemDung
-TuyenDuong.hasMany(DiemDung, { 
-  foreignKey: "idtuyenduong", 
-  as: "diemDungs"  // alias bắt buộc
-});
 
-// DiemDung thuộc về TuyenDuong
-DiemDung.belongsTo(TuyenDuong, { 
-  foreignKey: "idtuyenduong",
-  as: "tuyenDuong"  // alias bắt buộc
-});
+
+
 
 // DiemDung có nhiều HocSinh (Quan hệ 1-nhiều: 1 điểm dừng là mặc định cho nhiều học sinh)
 DiemDung.hasMany(HocSinh, {
@@ -92,18 +84,21 @@ LichChuyen.belongsTo(TuyenDuong, {
 LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
 LichChuyen.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 
-DangKyChuyen.belongsTo(HocSinh, { foreignKey: "mahocsinh" });
-DangKyChuyen.belongsTo(LichChuyen, { foreignKey: "idlich" });
+DangKyDiemDon.belongsTo(HocSinh, { foreignKey: "mahocsinh" });
+DangKyDiemDon.belongsTo(DiemDung, { foreignKey: "iddiemdung" });
+DangKyDiemDon.belongsTo(PhuHuynh, { foreignKey: "idphuhuynh" });
 
-TrangThaiDonTra.belongsTo(DangKyChuyen, { foreignKey: "iddangky" });
+
 ViTriXe.belongsTo(XeBuyt, { foreignKey: "idxebuyt" });
-
+XeBuyt.belongsTo(ViTriXe, { foreignKey: "idvitri" });
 ThongBao.belongsTo(NguoiDung, { foreignKey: "idnguoidung" });
 ThongBao.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
 SuCo.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 SuCo.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
+TrangThaiDonTra.belongsTo(HocSinh, { foreignKey: "idhocsinh" });
+TrangThaiDonTra.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
 // =====================
 // Xuất tất cả model
@@ -118,7 +113,7 @@ export {
     DiemDung,
     XeBuyt,
     LichChuyen,
-    DangKyChuyen,
+    DangKyDiemDon,
     TrangThaiDonTra,
     ViTriXe,
     ThongBao,

@@ -1,200 +1,148 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
+import "leaflet-routing-machine";
 
 /**
- * Hook tải Google Maps Script
+ * Component bản đồ Leaflet với tuyến đường thực tế
+ * Props:
+ * - routes: [
+ *     {
+ *       id,
+ *       name,
+ *       color,       // màu polyline
+ *       dotColor,    // màu điểm dừng
+ *       stops: [{lat,lng,label?}]
+ *     }
+ *   ]
+ * - buses: [
+ *     { id, routeId?, position: {lat,lng}, label?, icon? }
+ *   ]
+ * - school: {lat,lng} - vị trí trường học
+ * - zoom: số zoom mặc định
  */
-const useGoogleMapsScript = (apiKey) => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(null);
-
-  useEffect(() => {
-    if (window.google) {
-      setIsLoaded(true);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry,places`;
-    script.async = true;
-
-    script.onerror = () =>
-      setLoadError("Could not load Google Maps script. Check API Key.");
-
-    script.onload = () => {
-      if (window.google && window.google.maps) {
-        setIsLoaded(true);
-      } else {
-        setLoadError(
-          "Google Maps script loaded, but 'window.google.maps' is undefined."
-        );
-      }
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, [apiKey]);
-
-  return { isLoaded, loadError };
-};
-
-/**
- * Component bản đồ Google hoàn thiện
- */
-const GoogleMapDisplay = ({
-  busPosition,
-  studentPickup,
-  busStops,
-  routeCoordinates,
+const LeafletRoutingMap = ({
+  routes = [],
+  buses = [],
   school,
-  apiKey = "AIzaSyA_JStH-ku5M_jeUjakhpWBT1m7P6_s-w4",
   className = "",
-  zoom = 14,
-  showZoomControl = true,
+  zoom = 13,
   defaultCenter = { lat: 10.776, lng: 106.702 },
 }) => {
-  const { isLoaded, loadError } = useGoogleMapsScript(apiKey);
   const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
+  const routeControlsRef = useRef([]);
   const markersRef = useRef([]);
-  const polylineRef = useRef(null);
-
-  const memoizedDefaultCenter = useMemo(() => defaultCenter, [defaultCenter]);
 
   useEffect(() => {
-    if (!isLoaded || loadError || !mapRef.current) return;
-    if (!window.google || !window.google.maps) {
-      console.error("Google Maps API is not available.");
-      return;
-    }
-
-    const mapCenter = school || busPosition || memoizedDefaultCenter;
-
-    // Khởi tạo bản đồ lần đầu
-    if (!mapInstanceRef.current) {
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        center: mapCenter,
-        zoom: zoom,
-        disableDefaultUI: true,
-        zoomControl: showZoomControl,
-        fullscreenControl: false,
+    // Khởi tạo bản đồ
+    if (!mapRef.current) {
+      mapRef.current = L.map("leaflet-map", {
+        center: school || defaultCenter,
+        zoom,
+        zoomControl: true,
       });
+
+      // Tile layer OpenStreetMap miễn phí
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(mapRef.current);
     }
 
-    const map = mapInstanceRef.current;
+    const map = mapRef.current;
 
-    // Set tâm bản đồ nếu có trường
-    if (school) map.setCenter(school);
+    // Xóa route cũ
+    routeControlsRef.current.forEach((rc) => rc.remove());
+    routeControlsRef.current = [];
 
     // Xóa marker cũ
-    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    // Xóa polyline cũ
-    if (polylineRef.current) {
-      polylineRef.current.setMap(null);
-      polylineRef.current = null;
-    }
-
-    // ⭐ Marker TRƯỜNG HỌC
+    // Marker trường học
     if (school) {
-      const schoolMarker = new window.google.maps.Marker({
-        position: school,
-        map,
+      const schoolMarker = L.marker([school.lat, school.lng], {
         title: "Trường học",
-        icon: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
-      });
+        icon: L.icon({
+          iconUrl: "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+          iconSize: [32, 32],
+        }),
+      }).addTo(map);
       markersRef.current.push(schoolMarker);
     }
 
-    // ⭐ Marker XE BUÝT với icon xe bus
-    if (busPosition) {
-      const busMarker = new window.google.maps.Marker({
-        position: busPosition,
-        map,
-        title: "Vị trí xe buýt",
-        icon: {
-          url: "https://img.icons8.com/color/48/bus.png",
-          scaledSize: new window.google.maps.Size(40, 40),
+    // Màu mặc định cho tuyến
+    const defaultColors = [
+      { polyline: "#FF0000", dot: "red" },
+      { polyline: "#0000FF", dot: "blue" },
+      { polyline: "#00FF00", dot: "green" },
+      { polyline: "#FF00FF", dot: "purple" },
+      { polyline: "#FFA500", dot: "orange" },
+    ];
+
+    // Vẽ tuyến với đường đi thực tế
+    routes.forEach((route, i) => {
+      if (!route.stops || route.stops.length < 2) return;
+
+      const color = route.color || defaultColors[i % defaultColors.length].polyline;
+      const dotColor = route.dotColor || defaultColors[i % defaultColors.length].dot;
+
+      const waypoints = route.stops.map((stop) => L.latLng(stop.lat, stop.lng));
+
+      const control = L.Routing.control({
+        waypoints: waypoints,
+        lineOptions: {
+          styles: [{ color, weight: 4, opacity: 0.7 }],
         },
-      });
-      markersRef.current.push(busMarker);
-    }
+        createMarker: function (i, wp) {
+          return L.circleMarker(wp.latLng, {
+            radius: 6,
+            color: dotColor,
+            fillColor: dotColor,
+            fillOpacity: 1,
+          }).bindPopup(route.stops[i].label || `${route.name} - Điểm ${i + 1}`);
+        },
+        addWaypoints: false,
+        draggableWaypoints: false,
+        fitSelectedRoutes: false,
+        show: false,
+      }).addTo(map);
 
-    // ⭐ Marker ĐÓN HỌC SINH
-    if (studentPickup) {
-      const pickupMarker = new window.google.maps.Marker({
-        position: studentPickup,
-        map,
-        title: "Điểm đón học sinh",
-        icon: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
-      });
-      markersRef.current.push(pickupMarker);
-    }
-    if ( busStops ) {
-      busStops.forEach((stop, index) => {
-        const stopMarker = new window.google.maps.Marker({
-          position: stop,
-          map,
-          title: `${stop.label || `Điểm dừng ${index + 1}`}`,
-          icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-        });
-        markersRef.current.push(stopMarker);
-      });
-    }
+      routeControlsRef.current.push(control);
+    });
 
-    // ⭐ Vẽ polyline tuyến đường nếu có
-    if (routeCoordinates && routeCoordinates.length > 0) {
-      polylineRef.current = new window.google.maps.Polyline({
-        path: routeCoordinates,
-        geodesic: true,
-        strokeColor: "#FF0000",
-        strokeOpacity: 0.7,
-        strokeWeight: 3,
-        map: map,
-      });
-    }
-  }, [
-    isLoaded,
-    loadError,
-    school,
-    busPosition,
-    studentPickup,
-    routeCoordinates,
-    zoom,
-    showZoomControl,
-    memoizedDefaultCenter,
-  ]);
+    // Marker xe buýt
+    buses.forEach((bus) => {
+      const icon = bus.icon
+        ? L.icon({ iconUrl: bus.icon, iconSize: [32, 32] })
+        : L.icon({ iconUrl: "https://img.icons8.com/color/48/bus.png", iconSize: [32, 32] });
 
-  if (loadError) {
-    return (
-      <div className={`p-4 text-red-600 ${className}`}>
-        Lỗi: {loadError} (Kiểm tra API Key)
-      </div>
-    );
-  }
+      const marker = L.marker([bus.position.lat, bus.position.lng], {
+        title: bus.label || `Xe buýt ${bus.id}`,
+        icon,
+      }).addTo(map);
 
-  if (!isLoaded) {
-    return (
-      <div
-        className={`p-4 text-blue-600 flex items-center justify-center h-full ${className}`}
-      >
-        Đang tải bản đồ...
-      </div>
-    );
-  }
+      markersRef.current.push(marker);
+    });
+
+    // Auto fit bounds
+    const bounds = L.latLngBounds([]);
+    if (school) bounds.extend([school.lat, school.lng]);
+    routes.forEach((route) => route.stops?.forEach((s) => bounds.extend([s.lat, s.lng])));
+    buses.forEach((bus) => bounds.extend([bus.position.lat, bus.position.lng]));
+    if (bounds.isValid()) map.fitBounds(bounds);
+
+  }, [routes, buses, school, zoom, defaultCenter]);
 
   return (
     <div
-      ref={mapRef}
+      id="leaflet-map"
       style={{ width: "100%", height: "100%", borderRadius: "0.5rem" }}
       className={className}
     />
   );
 };
 
-export default GoogleMapDisplay;
+export default LeafletRoutingMap;

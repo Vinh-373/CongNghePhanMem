@@ -1,9 +1,9 @@
 export default (sequelize, DataTypes) => {
   return sequelize.define("vitrixe", {
-    idvitrixe: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    idvitri: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     idxebuyt: { type: DataTypes.INTEGER, allowNull: false },
-    lat: { type: DataTypes.DOUBLE, allowNull: false },
-    lng: { type: DataTypes.DOUBLE, allowNull: false },
-    thoigian: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+    kinhdo: { type: DataTypes.STRING, allowNull: false },
+    vido: { type: DataTypes.STRING, allowNull: false },
+    
   });
 };

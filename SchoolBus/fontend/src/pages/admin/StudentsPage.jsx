@@ -69,6 +69,7 @@ export default function StudentsPage() {
       if (!res.ok) throw new Error("Lỗi khi tải dữ liệu");
       const data = await res.json();
       setStudents(data.students || []);
+      // console.log("Dữ liệu học sinh:", data.students);
     } catch (err) {
       setError(err.message);
     } finally {

@@ -1,4 +1,4 @@
-import { NguoiDung, PhuHuynh, HocSinh, DiemDung, XeBuyt, TuyenDuong, TaiXe, LichChuyen } from "../models/index.js";
+import { NguoiDung, PhuHuynh, HocSinh, DiemDung, XeBuyt, TuyenDuong, TaiXe, LichChuyen, DangKyDiemDon, ViTriXe } from "../models/index.js";
 import fs from "fs";
 import path from "path";
 import bcrypt from "bcrypt";
@@ -12,7 +12,7 @@ export const getAllStudents = async (req, res) => {
                 {
                     model: DiemDung,
                     as: 'diemDonMacDinh',
-                    attributes: ['tendiemdon', 'diachi'],
+                    attributes: ['iddiemdung','tendiemdon', 'diachi'],
                     required: false
                 },
                 {
@@ -119,26 +119,94 @@ export const addVehicle = async (req, res) => {
         });
     }
 };
+const pointIds = (jsonString) => {
+    if (!jsonString) return [];
+    try {
+        // Chuyển đổi chuỗi JSON (ví dụ: "[1, 5, 2]") thành mảng các ID số
+        const ids = JSON.parse(jsonString);
+        return Array.isArray(ids) ? ids : [];
+    } catch (e) {
+        console.error("LỖI PARSE JSON", e, "Chuỗi gốc:", jsonString);
+        return [];
+    }
+};
+
 export const getAllRoutes = async (req, res) => {
     try {
-        const routes = await TuyenDuong.findAll({
-            include: [
-                {
-                    model: DiemDung,
-                    as: 'diemDungs',
-                }
-            ],
-            order: [[{ model: DiemDung, as: 'diemDungs' }, 'thutu', 'ASC']]  // ✔ sắp xếp theo thutu
+        // 1. TRUY VẤN TẤT CẢ TUYẾN ĐƯỜNG
+        const routes = await TuyenDuong.findAll();
+        
+        // 2. TÌM VÀ THU THẬP TẤT CẢ ID ĐIỂM DỪNG DUY NHẤT
+        let allPointIds = new Set();
+        routes.forEach(route => {
+            // dsdiemdung là chuỗi JSON chứa các ID điểm dừng theo thứ tự
+            const ids = pointIds(route.dsdiemdung);
+            ids.forEach(id => allPointIds.add(id));
+        });
+
+        const uniquePointIds = Array.from(allPointIds);
+
+        // 3. TRUY VẤN CHI TIẾT TẤT CẢ ĐIỂM DỪNG ĐÓ
+        let pointMap = {};
+        if (uniquePointIds.length > 0) {
+            const pointsDetail = await DiemDung.findAll({
+                where: {
+                    // Giả định cột ID của DiemDung là iddiemsung
+                    iddiemdung: uniquePointIds 
+                },
+                // Có thể thêm attributes nếu không muốn lấy tất cả các cột
+            });
+
+            // Tạo Map { iddiemsung: {chi tiết điểm dừng} } để tra cứu nhanh
+            pointMap = pointsDetail.reduce((map, point) => {
+                // Giả định iddiemsung là key chính để map
+                map[point.iddiemdung] = point.toJSON(); 
+                return map;
+            }, {});
+        }
+
+        // 4. GẮN THÔNG TIN ĐIỂM DỪNG CHI TIẾT VÀO TỪNG TUYẾN ĐƯỜNG
+        const finalRoutes = routes.map(route => {
+            const routeData = route.toJSON();
+            const idsInRoute = pointIds(routeData.dsdiemdung);
+
+            // Tạo một mảng chi tiết các điểm dừng theo đúng thứ tự trong idsInRoute
+            const detailedPoints = idsInRoute
+                .map(id => pointMap[id])
+                .filter(point => point); // Lọc bỏ điểm dừng không tìm thấy (nếu có)
+
+            routeData.diemDungDetails = detailedPoints;
+            
+            // Nếu bạn muốn giữ lại chuỗi JSON dsdiemdung gốc, không cần lệnh delete
+            // delete routeData.dsdiemdung; 
+            
+            return routeData;
         });
 
         res.status(200).json({
             message: "Lấy toàn bộ danh sách tuyến đường thành công!",
-            routes
+            routes: finalRoutes // Trả về danh sách tuyến đường đã có chi tiết điểm dừng
         });
     } catch (error) {
         console.error("❌ Lỗi lấy toàn bộ danh sách tuyến đường:", error);
         res.status(500).json({
             message: "Lỗi máy chủ khi lấy danh sách tuyến đường!",
+            error: error.message
+        });
+    }
+};
+export const addRoute = async (req, res) => {
+    try {
+        const { tentuyen, dsdiemdung, mota, loaituyen, trangthai } = req.body;
+        const newRoute = await TuyenDuong.create({ tentuyen, dsdiemdung, mota, loaituyen, trangthai });
+        res.status(201).json({
+            message: "Thêm tuyến đường thành công!",
+            newRoute
+        });
+    } catch (error) {
+        console.error("❌ Lỗi thêm tuyến đường:", error);
+        res.status(500).json({
+            message: "Lỗi máy chủ khi thêm tuyến đường!",
             error: error.message
         });
     }
@@ -316,11 +384,7 @@ export const addDriver = async (req, res) => {
 export const getAllPickupPoints = async (req, res) => {
     try {
         const pickupPoints = await DiemDung.findAll({
-            include: [{
-                model: TuyenDuong,
-                as: 'tuyenDuong',
-                attributes: ['tentuyen', 'idtuyenduong'],
-            }]
+            
         });
         res.status(200).json({
             message: "Lấy toàn bộ danh sách điểm đón thành công!",
@@ -336,8 +400,8 @@ export const getAllPickupPoints = async (req, res) => {
 };
 export const addPickupPoint = async (req, res) => {
     try {
-        const { tendiemdon, diachi, idtuyenduong, thutu, trangthai,kinhdo,vido } = req.body;
-        const newPoint = await DiemDung.create({ tendiemdon, diachi, idtuyenduong, thutu, trangthai,kinhdo,vido });
+        const { tendiemdon, diachi, trangthai,kinhdo,vido } = req.body;
+        const newPoint = await DiemDung.create({ tendiemdon, diachi, trangthai,kinhdo,vido });
         res.status(201).json({
             message: "Thêm điểm đón thành công!",
             newPoint
@@ -409,7 +473,24 @@ export const getAllSchadules = async (req, res) => {
                 where: {
                     mahocsinh: uniqueStudentIds 
                 },
-                attributes: ['mahocsinh', 'hoten', 'lop', 'namsinh', 'gioitinh', 'anhdaidien', 'idphuhuynh', 'iddiemdon'] 
+                attributes: ['mahocsinh', 'hoten', 'lop', 'namsinh', 'gioitinh', 'anhdaidien', 'idphuhuynh', 'iddiemdon'],
+                include: [
+                    {
+                        model: PhuHuynh,
+                        as: 'parentInfo',
+                        
+                        include: [{
+                            model: NguoiDung,
+                            as: 'userInfo',
+                            attributes: ['hoten', 'sodienthoai', 'email'],
+                        }]
+                    },
+                    {
+                        model: DiemDung,
+                        as: 'diemDonMacDinh',
+                        attributes: ['iddiemdung','tendiemdon'],
+                    }
+                ]
             });
 
             studentMap = studentsDetail.reduce((map, student) => {
@@ -457,8 +538,7 @@ export const getAllSchadules = async (req, res) => {
                 idtuyenduong: schedule.idtuyenduong,
                 tentuyen: schedule.tuyenDuongInfo ? schedule.tuyenDuongInfo.tentuyen : 'N/A', 
 
-                // Trạng thái và Loại chuyến
-                loaichuyen: schedule.loaichuyen == 1 ? 'Đón' : 'Trả', 
+                
                 trangthai_code: schedule.trangthai,
                 trangthai_text: statusMap[schedule.trangthai] || 'Không rõ',
 
@@ -484,13 +564,12 @@ export const getAllSchadules = async (req, res) => {
 };
 export const addSchedule = async (req, res) => {
     try {
-        const { idxebuyt, idtaixe, idtuyenduong, giobatdau, loaichuyen, ngaydi, danhsachhocsinh, trangthai } = req.body;
+        const { idxebuyt, idtaixe, idtuyenduong, giobatdau, ngaydi, danhsachhocsinh, trangthai } = req.body;
         const newSchedule = await LichChuyen.create({
             idxebuyt,
             idtaixe,
             idtuyenduong,
             giobatdau,
-            loaichuyen,
             ngaydi,
             danhsachhocsinh: danhsachhocsinh || '[]',
             trangthai: trangthai || 0
@@ -503,6 +582,140 @@ export const addSchedule = async (req, res) => {
         console.error("❌ Lỗi thêm lịch chuyến:", error);
         res.status(500).json({
             message: "Lỗi máy chủ khi thêm lịch chuyến!",
+            error: error.message
+        });
+    }
+};
+export const getAllRegisteredPickupPoints = async (req, res) => {
+    try {
+        const registrations = await DangKyDiemDon.findAll({
+            include: [
+                {
+                    model: HocSinh,
+                    attributes: ['mahocsinh', 'hoten', 'lop']
+                },
+                {
+                    model: DiemDung,
+                    attributes: ['iddiemdung', 'tendiemdon', 'diachi']
+                },
+                {
+                    model: PhuHuynh,
+                    include: [{
+                        model: NguoiDung,
+                        as: 'userInfo',
+                        attributes: ['hoten', 'sodienthoai', 'email']
+                    }]
+                }
+            ]
+        });
+        res.status(200).json({
+            message: "Lấy toàn bộ danh sách đăng ký điểm đón thành công!",
+            registrations
+        });
+    } catch (error) {
+        console.error("❌ Lỗi lấy toàn bộ danh sách đăng ký điểm đón:", error);
+        res.status(500).json({
+            message: "Lỗi máy chủ khi lấy danh sách đăng ký điểm đón!",
+            error: error.message
+        });
+    }
+
+};
+export const getInfoDashboard = async (req, res) => {
+    try {
+        const studentCount = await HocSinh.count();
+        const driverCount   = await TaiXe.count();
+
+        const vehicleData = await XeBuyt.findAll({
+            attributes: ['idxebuyt', 'bienso', 'trangthai']
+        });
+
+        // ==============================
+        // Lấy lịch chuyến hôm nay
+        // ==============================
+        const schaeduleTodayData = await LichChuyen.findAll({
+            where: {
+                ngaydi: new Date().toISOString().split('T')[0]
+            },
+            attributes: ['idxebuyt','idtaixe','giobatdau','idtuyenduong','ngaydi','thu','trangthai'],
+            include: [
+                { model: XeBuyt, attributes: ['bienso','trangthai'],
+                    include: [{
+                        model: ViTriXe,
+                        attributes: ['kinhdo','vido'],
+                    }]
+                 },
+                { 
+                    model: TaiXe,
+                    include: [{
+                        model: NguoiDung,
+                        as: 'userInfo',
+                        attributes: ['hoten'],
+                    }]
+                },
+                {
+                    model: TuyenDuong,
+                    as: 'tuyenDuongInfo',
+                    attributes: ['tentuyen','dsdiemdung','loaituyen'],
+                }
+            ]
+        });
+
+        // ==============================
+        // LẤY DANH SÁCH TẤT CẢ ID ĐIỂM DỪNG (TỪ SCHEDULE TODAY)
+        // ==============================
+        let allPointIds = new Set();
+
+        schaeduleTodayData.forEach(item => {
+            const route = item.tuyenDuongInfo;
+            if (route?.dsdiemdung) {
+                const ids = pointIds(route.dsdiemdung);
+                ids.forEach(id => allPointIds.add(id));
+            }
+        });
+
+        const uniquePointIds = Array.from(allPointIds);
+
+        // ==============================
+        // TRUY VẤN TẤT CẢ CHI TIẾT ĐIỂM DỪNG (TỐI ƯU)
+        // ==============================
+        let pointMap = {};
+        if (uniquePointIds.length > 0) {
+            const pointsDetail = await DiemDung.findAll({
+                where: { iddiemdung: uniquePointIds }
+            });
+
+            pointMap = pointsDetail.reduce((map, point) => {
+                map[point.iddiemdung] = point.toJSON();
+                return map;
+            }, {});
+        }
+
+        // GẮN CHI TIẾT VÀO từng route
+        const finalSchedule = schaeduleTodayData.map(item => {
+            const route = item.tuyenDuongInfo;
+            if (route?.dsdiemdung) {
+                const idsInRoute = pointIds(route.dsdiemdung);
+                route.dataValues.diemDungDetails = idsInRoute
+                    .map(id => pointMap[id])
+                    .filter(x => x);
+            }
+            return item;
+        });
+
+        return res.status(200).json({
+            message: "Lấy thông tin dashboard thành công!",
+            data: {
+                studentCount,
+                driverCount,
+                vehicleData,
+                schaeduleTodayData: finalSchedule
+            }
+        });
+    } catch (error) {
+        console.error("❌ Lỗi lấy thông tin dashboard:", error);
+        return res.status(500).json({
+            message: "Lỗi máy chủ!",
             error: error.message
         });
     }
