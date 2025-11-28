@@ -43,8 +43,7 @@ export const PARENT_MENU = [
  */
 export const DRIVER_MENU = [
   { icon: Home, label: "Trang chủ", href: "/driver/schoolbus/dashboard" },
-  { icon: Bus, label: "Chuyến đi hiện tại", href: "/driver/schoolbus/current-trip" },
-  { icon: CalendarClock, label: "Lịch trình", href: "/driver/schoolbus/schedule" },
+  { icon: CalendarClock, label: "Lịch trình", href: "/driver/schoolbus/schedules" },
   { icon: User, label: "Thông tin tài khoản", href: "/driver/schoolbus/account" },
 ];
 

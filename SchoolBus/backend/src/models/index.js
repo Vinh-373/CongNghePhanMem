@@ -35,6 +35,8 @@ const SuCo = SuCoModel(sequelize, DataTypes);
 // Thiết lập quan hệ
 // =====================
 // 1. Tài xế (TaiXe) liên kết với Người dùng (NguoiDung)
+
+// cái ban đầu
 TaiXe.belongsTo(NguoiDung, { 
     foreignKey: "idnguoidung" ,
     as: "userInfo"
@@ -81,7 +83,10 @@ LichChuyen.belongsTo(TuyenDuong, {
     as: "tuyenDuongInfo" // Dùng alias riêng để tránh trùng với DiemDung.belongsTo(TuyenDuong)
 });
 
-LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
+LichChuyen.belongsTo(XeBuyt, { 
+    foreignKey: "idxebuyt"
+}); 
+// LichChuyen.belongsTo(XeBuyt, { foreignKey: "idxebuyt"});
 LichChuyen.belongsTo(TaiXe, { foreignKey: "idtaixe" });
 
 DangKyDiemDon.belongsTo(HocSinh, { foreignKey: "mahocsinh" });

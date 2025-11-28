@@ -5,11 +5,12 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRouters.js';
 import userRoutes from './routes/userRouters.js';
 import adminRoutes from './routes/adminRouters.js';
+import driverRoutes from './routes/driverRoutes.js';
 
 dotenv.config();
 
 const PORT = process.env.PORT || 5001;
-const app = express();
+const app = express();  
 
 // 🧩 Middleware
 app.use(express.json());
@@ -33,7 +34,7 @@ app.get('/schoolbus/health', (req, res) => {
 
 // ✅ Auth routes
 app.use("/schoolbus/auth", authRoutes);
-
+app.use("/schoolbus/driver", driverRoutes);
 app.use("/schoolbus/user", userRoutes);
 app.use("/schoolbus/admin", adminRoutes); 
 

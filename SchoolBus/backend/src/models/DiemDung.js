@@ -26,8 +26,13 @@ export default (sequelize, DataTypes) => {
     trangthai: {
       type: DataTypes.TINYINT,
       allowNull: false,
-      defaultValue: 1, // Mặc định là '1' - Hoạt động
+      defaultValue: 1,
     },
+  }, {
+    freezeTableName: true,   // Không tự thêm "s"
+    tableName: "diemdung",   // GHI ĐÚNG TÊN BẢNG TRONG DB
+    timestamps: false        // Nếu bảng không có createdAt, updatedAt
   });
+
   return DiemDung;
 };
