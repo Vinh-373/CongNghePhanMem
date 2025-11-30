@@ -20,6 +20,7 @@ import PointsRegisterPage from "./pages/parent/RegisterPointsPage.jsx";
 import DriverDashboard from "./pages/driver/DashboardPage.jsx";
 import DriverSchedules from "./pages/driver/SchedulesPage.jsx";
 import DiverAccount from "./pages/driver/AccountPage.jsx";
+import DriverNotifications from "./pages/driver/NotificationsPage.jsx";
 import PickupPointsPage from "./pages/admin/PickupPointsPage.jsx";
 import RegisterPointPage from "./pages/admin/RegisterPointPage.jsx";
 
@@ -58,6 +59,7 @@ function App() {
           <Route path="/driver/schoolbus" element={<MainLayout />}>
             <Route path="dashboard" element={<DriverDashboard />} />
             <Route path="schedules" element={<DriverSchedules />} />
+            <Route path="notifications" element={<DriverNotifications />} />
             <Route path="account" element={<DiverAccount />} />
           </Route>
           {/* 404 */}

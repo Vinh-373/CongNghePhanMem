@@ -1,6 +1,6 @@
 import { TaiXe, NguoiDung } from "../models/index.js";
 import sequelize from "../config/sequelize.js";
-import { LichChuyen, TuyenDuong, XeBuyt, DiemDung, HocSinh, TrangThaiDonTra, ViTriXe } from '../models/index.js';
+import { LichChuyen, TuyenDuong, XeBuyt, DiemDung, HocSinh, TrangThaiDonTra, ViTriXe , ThongBao} from '../models/index.js';
 import { Op, Sequelize } from 'sequelize'; // Import Op và Sequelize
 
 /**
@@ -618,4 +618,41 @@ export const updateDriverLocation = async (req, res) => {
             error: error.message,
         });
     }
+};
+
+// Thông báo 
+export const getNotificationByUser = async (req, res) => {
+  try {
+    const { idnguoidung } = req.params;
+
+    if (!idnguoidung) {
+      return res.status(400).json({ message: "Thiếu idnguoidung" });
+    }
+
+    const userIdNum = parseInt(idnguoidung, 10);
+    if (isNaN(userIdNum)) {
+      return res.status(400).json({ message: "idnguoidung không hợp lệ" });
+    }
+
+    const notifications = await ThongBao.findAll({
+      where: { idnguoidung: userIdNum },
+      order: [["thoigiangui", "DESC"]],
+    });
+
+    return res.status(200).json({
+      message: "Lấy thông báo thành công",
+      data: notifications.map((n) => ({
+        idthongbao: n.idthongbao,
+        tieude: n.tieude,
+        noidung: n.noidung,
+        thoigiangui: n.thoigiangui,   // nên trả thêm cho front-end
+      })),
+    });
+  } catch (error) {
+    console.error("Lỗi lấy thông báo:", error);
+    return res.status(500).json({
+      message: "Lỗi server khi lấy thông báo",
+      error: error.message,
+    });
+  }
 };

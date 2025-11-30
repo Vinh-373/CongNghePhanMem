@@ -1,6 +1,6 @@
 import {
   Home, Bus, UserCheck, MapPin, Users, Calendar, MessageCircle, Settings, UsersRound, UserPen,
-   CalendarClock, Bell, User, MessageSquare,Route, BookCheck
+  CalendarClock, Bell, User, MessageSquare, Route, BookCheck
 } from "lucide-react";
 
 // Mã vai trò dựa trên bảng 'nguoidung' trong schoolbus.sql: 0=Admin, 1=Tài xế, 2=Phụ huynh
@@ -31,7 +31,7 @@ export const ADMIN_MENU = [
 export const PARENT_MENU = [
   { icon: Home, label: "Trang chủ", href: "/parent/schoolbus/dashboard" },
   { icon: User, label: "Hồ sơ Học sinh", href: "/parent/schoolbus/children" },
-  { icon : CalendarClock, label: "Đăng ký điểm đón", href: "/parent/schoolbus/pickup-point" },
+  { icon: CalendarClock, label: "Đăng ký điểm đón", href: "/parent/schoolbus/pickup-point" },
   { icon: UserPen, label: "Thông tin tài khoản", href: "/parent/schoolbus/account" },
   { icon: Bell, label: "Thông báo", href: "/parent/schoolbus/notifications" },
 ];
@@ -44,6 +44,7 @@ export const PARENT_MENU = [
 export const DRIVER_MENU = [
   { icon: Home, label: "Trang chủ", href: "/driver/schoolbus/dashboard" },
   { icon: CalendarClock, label: "Lịch trình", href: "/driver/schoolbus/schedules" },
+  { icon: Bell, label: "Thông báo", href: "/driver/schoolbus/notifications" },
   { icon: User, label: "Thông tin tài khoản", href: "/driver/schoolbus/account" },
 ];
 
@@ -53,15 +54,15 @@ export const DRIVER_MENU = [
  * @returns {Array<object>} Danh sách menu.
  */
 export const getMenuByRole = (role) => {
-    switch (role) {
-        case 0: // Admin
-            // Đã cập nhật href trong menu Admin để bớt prefix schoolbus
-            return ADMIN_MENU
-        case 1: // Tài xế
-            return DRIVER_MENU;
-        case 2: // Phụ huynh
-            return PARENT_MENU;
-        default:
-            return []; // Không có menu nếu không xác định
-    }
+  switch (role) {
+    case 0: // Admin
+      // Đã cập nhật href trong menu Admin để bớt prefix schoolbus
+      return ADMIN_MENU
+    case 1: // Tài xế
+      return DRIVER_MENU;
+    case 2: // Phụ huynh
+      return PARENT_MENU;
+    default:
+      return []; // Không có menu nếu không xác định
+  }
 }
