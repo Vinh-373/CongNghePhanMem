@@ -195,13 +195,128 @@ export const getAllRoutes = async (req, res) => {
         });
     }
 };
+// export const addRoute = async (req, res) => {
+//     try {
+//         const { tentuyen, dsdiemdung, mota, loaituyen, trangthai } = req.body;
+//         const newRoute = await TuyenDuong.create({ tentuyen, dsdiemdung, mota, loaituyen, trangthai });
+//         res.status(201).json({
+//             message: "Thêm tuyến đường thành công!",
+//             newRoute
+//         });
+//     } catch (error) {
+//         console.error("❌ Lỗi thêm tuyến đường:", error);
+//         res.status(500).json({
+//             message: "Lỗi máy chủ khi thêm tuyến đường!",
+//             error: error.message
+//         });
+//     }
+// };
+function createFullRoutePolyline(stops, steps = 30) {
+    let fullRoutePolyline = [];
+
+    // Chỉ tính toán nếu có ít nhất 2 điểm dừng
+    if (stops.length < 2) {
+        return "[]"; 
+    }
+
+    for (let i = 0; i < stops.length - 1; i++) {
+        const start = stops[i];
+        const end = stops[i + 1];
+        
+        // Thêm điểm dừng hiện tại
+        fullRoutePolyline.push(start); 
+
+        // Nội suy tuyến tính (Interpolation)
+        for (let j = 1; j <= steps; j++) {
+            const ratio = j / steps;
+            
+            const lat = start.lat + (end.lat - start.lat) * ratio;
+            const lng = start.lng + (end.lng - start.lng) * ratio;
+
+            fullRoutePolyline.push({ 
+                lat: parseFloat(lat.toFixed(6)), 
+                lng: parseFloat(lng.toFixed(6)) 
+            });
+        }
+    }
+    
+    // Đảm bảo điểm dừng cuối cùng được thêm vào
+    const lastStop = stops[stops.length - 1];
+    if (fullRoutePolyline.length === 0 || fullRoutePolyline[fullRoutePolyline.length - 1].lat !== lastStop.lat || fullRoutePolyline[fullRoutePolyline.length - 1].lng !== lastStop.lng) {
+        fullRoutePolyline.push(lastStop);
+    }
+
+    return JSON.stringify(fullRoutePolyline); 
+}
+
+// =========================================================================
+// --- CONTROLLER: addRoute ĐÃ VIẾT LẠI ---
+// =========================================================================
+
 export const addRoute = async (req, res) => {
     try {
         const { tentuyen, dsdiemdung, mota, loaituyen, trangthai } = req.body;
-        const newRoute = await TuyenDuong.create({ tentuyen, dsdiemdung, mota, loaituyen, trangthai });
+        
+        // 1. CHUYỂN ĐỔI dsdiemdung (String JSON) thành Array ID
+        let stopIds;
+        try {
+            stopIds = JSON.parse(dsdiemdung);
+            if (!Array.isArray(stopIds) || stopIds.length < 2) {
+                 return res.status(400).json({ message: "dsdiemdung phải là một mảng ID điểm dừng có ít nhất 2 phần tử." });
+            }
+        } catch (e) {
+            return res.status(400).json({ message: "Định dạng dsdiemdung không hợp lệ (Không phải chuỗi JSON mảng)." });
+        }
+
+
+        // 2. TRUY VẤN TỌA ĐỘ TỪ DB THEO ĐÚNG THỨ TỰ ID
+        const pointsDetail = await DiemDung.findAll({
+            where: {
+                // Lấy các điểm dừng có ID nằm trong mảng stopIds
+                iddiemdung: stopIds 
+            },
+            attributes: ['vido', 'kinhdo', 'iddiemdung'],
+        });
+
+        // 3. ĐẢM BẢO TỌA ĐỘ ĐƯỢC XẾP ĐÚNG THEO THỨ TỰ stopIds
+        const pointMap = pointsDetail.reduce((map, point) => {
+            map[point.iddiemdung] = { 
+                lat: parseFloat(point.vido), 
+                lng: parseFloat(point.kinhdo) 
+            }; 
+            return map;
+        }, {});
+        
+        // Tạo mảng tọa độ theo đúng thứ tự tuyến đường
+        const stopsForCalculation = stopIds
+            .map(id => pointMap[id])
+            .filter(point => point); // Lọc bỏ nếu có ID điểm dừng không tồn tại
+
+        if (stopsForCalculation.length !== stopIds.length) {
+            console.warn(`Cảnh báo: Không tìm thấy ${stopIds.length - stopsForCalculation.length} tọa độ điểm dừng.`);
+        }
+        
+        // 4. TÍNH TOÁN FULL ROUTE POLYLINE
+        // Chuỗi JSON chứa mảng {lat, lng} chi tiết
+        const fullRoutePolyline = createFullRoutePolyline(stopsForCalculation, 30);
+        
+        // 5. LƯU VÀO CƠ SỞ DỮ LIỆU
+        // **Lưu ý:** Model TuyenDuong phải có trường `full_route_polyline` kiểu TEXT/JSON
+        const newRoute = await TuyenDuong.create({ 
+            tentuyen, 
+            dsdiemdung, 
+            mota, 
+            loaituyen, 
+            trangthai,
+            fullroutepolyline: fullRoutePolyline // 💡 LƯU CHUỖI TỌA ĐỘ CHI TIẾT
+        });
+        
         res.status(201).json({
-            message: "Thêm tuyến đường thành công!",
-            newRoute
+            message: "Thêm tuyến đường thành công và đã tính toán đường đi chi tiết!",
+            newRoute: {
+                 ...newRoute.toJSON(),
+                 fullroutepolylineinfo: `Chuỗi Polyline có ${JSON.parse(fullRoutePolyline).length} tọa độ.`
+            }
         });
     } catch (error) {
         console.error("❌ Lỗi thêm tuyến đường:", error);

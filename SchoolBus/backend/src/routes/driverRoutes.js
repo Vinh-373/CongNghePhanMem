@@ -1,5 +1,5 @@
 import express from "express";
-import { updateDriver,getDriverById, getDriverIdByUserId, getCurrentTrip} from "../controllers/driverControllers.js";
+import { updateDriver,getDriverById, getDriverIdByUserId, getCurrentTrip, putStudentStatus, putTripStatus, updateDriverLocation} from "../controllers/driverControllers.js";
 import { getWeeklySchedule } from "../controllers/driverControllers.js";
 
 // import { getDriverById } from "../controllers/driverControllers.js";
@@ -13,5 +13,8 @@ router.get("/user_id/:idnguoidung", getDriverIdByUserId);
 router.put("/update/:idtaixe", updateDriver);
 router.get("/schedule/:idtaixe", getWeeklySchedule);
 router.get("/current-trip/:idtaixe", getCurrentTrip);
+router.put("/student-status", putStudentStatus);
+router.put("/trip-status", putTripStatus);
+router.put("/update-location", updateDriverLocation);
 
 export default router;

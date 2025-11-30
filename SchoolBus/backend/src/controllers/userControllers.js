@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { NguoiDung, PhuHuynh, HocSinh, LichChuyen, TuyenDuong, DiemDung, TrangThaiDonTra, TaiXe, XeBuyt, DangKyDiemDon,ViTriXe} from "../models/index.js";
+import { NguoiDung, PhuHuynh, HocSinh, LichChuyen, TuyenDuong, DiemDung, TrangThaiDonTra, TaiXe, XeBuyt, DangKyDiemDon,ViTriXe,ThongBao} from "../models/index.js";
 import { where } from "sequelize";
 import { Op } from 'sequelize';
 
@@ -566,4 +566,24 @@ export const addRegisteredPoint = async (req, res) => {
     res.status(500).json({ message: "Lỗi máy chủ khi đăng ký điểm đón!", error: error.message });
   }
 };
+export const addNotification = async (req, res) => {
+  try{
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ message: "Chưa đăng nhập!" });
 
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "schoolbus_secret_key");
+    const idnguoidung = decoded.id;
+    const { tieude, noidung } = req.body;
+    const newNotification = await ThongBao.create({idnguoidung,tieude,noidung});
+    res.status(201).json({
+            message: "Thêm thông báo thành công!",
+            newNotification
+        });
+    } catch (error) {
+        console.error("❌ Lỗi thêm thông báo:", error);
+        res.status(500).json({
+            message: "Lỗi máy chủ khi thêm thông báo!",
+            error: error.message
+        });
+    }
+}

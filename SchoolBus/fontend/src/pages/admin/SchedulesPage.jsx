@@ -57,11 +57,11 @@ export default function SchedulesPage() {
     const [availableRoutes, setAvailableRoutes] = useState([]);
     const [availableVehicles, setAvailableVehicles] = useState([]);
     const [availableDrivers, setAvailableDrivers] = useState([]);
-    const [routesWithDetails, setRoutesWithDetails] = useState([]); // ⭐ Lưu chi tiết tuyến
+    const [routesWithDetails, setRoutesWithDetails] = useState([]);
     const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
 
     const [weekOffset, setWeekOffset] = useState(0);
-    const [selectedRouteId, setSelectedRouteId] = useState(null); // ⭐ Track tuyến đang chọn
+    const [formRouteId, setFormRouteId] = useState(null);
     
     const currentWeekRange = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
 
@@ -81,14 +81,14 @@ export default function SchedulesPage() {
                 const studentOptions = (studentsData.students || []).map(s => ({
                     value: s.mahocsinh.toString(),
                     label: `${s.mahocsinh} - ${s.hoten || 'N/A'}`,
-                    iddiemdon: s.iddiemdon // ⭐ Lưu iddiemdon
+                    iddiemdon: s.diemDonMacDinh.iddiemdung
                 }));
                 setAvailableStudents(studentOptions);
             }
 
             if (routesRes.ok) {
                 const routesData = await routesRes.json();
-                setRoutesWithDetails(routesData.routes || []); // ⭐ Lưu full data
+                setRoutesWithDetails(routesData.routes || []);
                 
                 const routeOptions = (routesData.routes || []).map(r => ({
                     value: r.idtuyenduong.toString(),
@@ -124,21 +124,19 @@ export default function SchedulesPage() {
     };
 
     // ⭐ LỌC HỌC SINH THEO TUYẾN ĐƯỜNG
-    const getFilteredStudents = useMemo(() => {
-        if (!selectedRouteId) {
-            return []; // Không có học sinh nếu chưa chọn tuyến
+    const filteredStudents = useMemo(() => {
+        if (!formRouteId) {
+            return [];
         }
 
-        // Tìm tuyến được chọn
         const selectedRoute = routesWithDetails.find(
-            r => r.idtuyenduong.toString() === selectedRouteId
+            r => r.idtuyenduong.toString() === formRouteId
         );
 
         if (!selectedRoute || !selectedRoute.diemDungDetails) {
             return [];
         }
 
-        // Lấy danh sách ID điểm dừng của tuyến
         const routeStopIds = selectedRoute.diemDungDetails.map(
             stop => stop.iddiemdung
         );
@@ -146,7 +144,6 @@ export default function SchedulesPage() {
         console.log('🔍 Route Stop IDs:', routeStopIds);
         console.log('👥 All Students:', availableStudents);
 
-        // Lọc học sinh có iddiemdon nằm trong routeStopIds
         const filtered = availableStudents.filter(student => {
             const hasValidStop = student.iddiemdon && routeStopIds.includes(student.iddiemdon);
             console.log(`Student ${student.label}: iddiemdon=${student.iddiemdon}, hasValidStop=${hasValidStop}`);
@@ -155,14 +152,13 @@ export default function SchedulesPage() {
 
         console.log('✅ Filtered Students:', filtered);
         return filtered;
-    }, [selectedRouteId, routesWithDetails, availableStudents]);
+    }, [formRouteId, routesWithDetails, availableStudents]);
 
     // CẤU TRÚC FORM
     const TRIP_SCHEDULE_FIELDS = useMemo(() => {
         const safeRoutes = Array.isArray(availableRoutes) ? availableRoutes : [];
         const safeVehicles = Array.isArray(availableVehicles) ? availableVehicles : [];
         const safeDrivers = Array.isArray(availableDrivers) ? availableDrivers : [];
-        const filteredStudents = getFilteredStudents;
 
         return [
             { 
@@ -188,7 +184,7 @@ export default function SchedulesPage() {
                 placeholder: safeRoutes.length > 0 ? "Chọn tuyến đường" : "Đang tải tuyến đường...",
                 onChange: (value) => {
                     console.log('🚏 Selected Route ID:', value);
-                    setSelectedRouteId(value);
+                    setFormRouteId(value);
                 }
             },
             {
@@ -220,15 +216,15 @@ export default function SchedulesPage() {
                 type: "multi-select",
                 required: false,
                 options: filteredStudents,
-                disabled: !selectedRouteId, // ⭐ Disable khi chưa chọn tuyến
-                placeholder: !selectedRouteId 
+                disabled: !formRouteId,
+                placeholder: !formRouteId 
                     ? "Vui lòng chọn tuyến đường trước" 
                     : filteredStudents.length > 0 
                         ? `${filteredStudents.length} học sinh phù hợp với tuyến này`
                         : "Không có học sinh phù hợp với tuyến này"
             },
         ];
-    }, [availableRoutes, availableVehicles, availableDrivers, getFilteredStudents, selectedRouteId]);
+    }, [availableRoutes, availableVehicles, availableDrivers, filteredStudents, formRouteId]);
 
     // --- FETCH SCHEDULES ---
     const loadSchedules = async () => {
@@ -276,10 +272,10 @@ export default function SchedulesPage() {
         loadSchedules();
     }, [weekOffset]);
 
-    // Reset selectedRouteId khi đóng dialog
+    // ⭐ Reset formRouteId khi đóng dialog
     useEffect(() => {
         if (!isDialogOpen) {
-            setSelectedRouteId(null);
+            setFormRouteId(null);
         }
     }, [isDialogOpen]);
 

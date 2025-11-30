@@ -130,10 +130,19 @@ function AddEntityDialog({
 
     // 🎯 HÀM CHUNG CẬP NHẬT FORM DATA
     const handleDataChange = (name, value) => {
+        console.log(`📝 Field changed: ${name} = ${value}`);
+        
         setFormData(prev => ({ 
             ...prev, 
             [name]: value 
         }));
+
+        // ⭐ GỌI CALLBACK onChange NẾU CÓ
+        const field = fields.find(f => f.name === name);
+        if (field && field.onChange) {
+            console.log(`🔔 Calling onChange for ${name}`);
+            field.onChange(value);
+        }
     };
 
     const handleInputChange = (e) => {
@@ -149,6 +158,11 @@ function AddEntityDialog({
                 setFilePreviews(prev => ({ ...prev, [fieldName]: URL.createObjectURL(file) }));
             }
         }
+    };
+
+    const handleSelectChange = (fieldName, value) => {
+        console.log(`🎯 Select changed: ${fieldName} = ${value}`);
+        handleDataChange(fieldName, value);
     };
 
     const handleSubmit = () => {
@@ -194,7 +208,7 @@ function AddEntityDialog({
                             {/* 🎯 XỬ LÝ LOẠI SELECT - HỖ TRỢ CẢ STRING VÀ OBJECT */}
                             {field.type === 'select' && field.options ? (
                                 <Select 
-                                    onValueChange={(value) => handleDataChange(field.name, value)} 
+                                    onValueChange={(value) => handleSelectChange(field.name, value)}
                                     value={formData[field.name]}
                                     name={field.name}
                                     disabled={field.disabled || field.isLoading}

@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRouters.js';
 import userRoutes from './routes/userRouters.js';
@@ -32,7 +34,7 @@ app.get('/schoolbus/health', (req, res) => {
   });
 });
 
-// ✅ Auth routes
+// ✅ Routes
 app.use("/schoolbus/auth", authRoutes);
 app.use("/schoolbus/driver", driverRoutes);
 app.use("/schoolbus/user", userRoutes);
@@ -56,17 +58,48 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ Start server
+// ✅ Start server với WebSocket
 async function startServer() {
   try {
     await connectDB();
     console.log('✅ MySQL connected successfully');
+
+    // Tạo HTTP server từ Express app
+    const httpServer = createServer(app);
+
+    // Tạo Socket.io server
+    const io = new Server(httpServer, {
+      cors: {
+        origin: "http://localhost:5173",
+        methods: ["GET", "POST"]
+      }
+    });
+
+    // Lắng nghe kết nối WebSocket
+    // Trong socket.js hoặc server.js
+io.on('connection', (socket) => {
+    console.log('Driver connected:', socket.id);
     
-    app.listen(PORT, () => {
-      console.log(`🚀 Server is running on port ${PORT}`);
+    // Lắng nghe event từ Driver
+    socket.on('vehiclePositionUpdated', (data) => {
+        console.log('📡 Nhận vị trí xe:', data);
+        // Broadcast cho tất cả Admin
+        io.emit('vehiclePositionUpdated', data);
+    });
+    
+    socket.on('tripStatusChanged', (data) => {
+        console.log('🚦 Trạng thái chuyến thay đổi:', data);
+        io.emit('tripStatusChanged', data);
+    });
+});
+
+    // Start server
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌐 Health check: http://localhost:${PORT}/schoolbus/health`);
       console.log(`🖼️  Static uploads: http://localhost:${PORT}/uploads/avatars/...`);
     });
+
   } catch (error) {
     console.error('❌ Server failed to start:', error);
     process.exit(1);

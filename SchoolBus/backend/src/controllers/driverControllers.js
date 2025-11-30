@@ -337,7 +337,7 @@ export const getCurrentTrip = async (req, res) => {
                 {
                     model: TuyenDuong,
                     as: "tuyenDuongInfo",
-                    attributes: ["tentuyen", "loaituyen", "dsdiemdung"],
+                    attributes: ["tentuyen", "loaituyen", "dsdiemdung", "fullroutepolyline"],
                     required: true,
                 },
                 {
@@ -516,5 +516,71 @@ export const getCurrentTrip = async (req, res) => {
     }
 };
 export const putStudentStatus = async (req, res) => {
-    const mahocsinh = req.params.mahocsinh;
+    const { idlich, idhocsinh, loaitrangthai} = req.body;
+    try {
+        const [status, created] = await TrangThaiDonTra.findOrCreate({
+            where: { idlich, idhocsinh },
+            
+        });
+        status.loaitrangthai = loaitrangthai;
+        await status.save();
+        return res.status(200).json({
+            message: created ? "Tạo trạng thái đón/trả thành công!" : "Cập nhật trạng thái đón/trả thành công!",
+            status,
+        });
+    } catch (error) {
+        console.error("❌ Lỗi cập nhật trạng thái đón/trả:", error);
+        return res.status(500).json({
+            message: "Lỗi máy chủ khi cập nhật trạng thái đón/trả!",
+            error: error.message,
+        });
+    }
+};
+export const putTripStatus = async (req, res) => {
+    const { idlich, trangthai} = req.body;
+    try {
+        const trip = await LichChuyen.findByPk(idlich);
+        if (!trip) {
+            return res.status(404).json({
+                message: `Không tìm thấy chuyến đi với ID: ${idlich}.`
+            });
+        }
+        trip.trangthai = trangthai;
+        await trip.save();
+        return res.status(200).json({   
+            message: "Cập nhật trạng thái chuyến đi thành công!",
+            trip,
+        });
+    } catch (error) {
+        console.error("❌ Lỗi cập nhật trạng thái chuyến đi:", error);
+        return res.status(500).json({
+            message: "Lỗi máy chủ khi cập nhật trạng thái chuyến đi!",
+            error: error.message,
+        });
+    }
+
+};
+export const updateDriverLocation = async (req, res) => {
+    const { idxebuyt, kinhdo, vido } = req.body;
+    try {
+        let vehicleLocation = await ViTriXe.findOne({ where: { idxebuyt } });
+        if (vehicleLocation) {
+            vehicleLocation.kinhdo = kinhdo;
+            vehicleLocation.vido = vido;
+            await vehicleLocation.save();
+        } else {
+            vehicleLocation = await ViTriXe.create({ idxebuyt, kinhdo, vido });
+        }
+        return res.status(200).json({
+            message: "Cập nhật vị trí xe thành công!",
+            vehicleLocation,
+        });
+    }
+    catch (error) {
+        console.error("❌ Lỗi cập nhật vị trí xe:", error);
+        return res.status(500).json({
+            message: "Lỗi máy chủ khi cập nhật vị trí xe!",
+            error: error.message,
+        });
+    }
 };
