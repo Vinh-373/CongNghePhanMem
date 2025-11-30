@@ -200,18 +200,34 @@ const mapDayNumberToVietnamese = (dayNumber) => {
 export const getWeeklySchedule = async (req, res) => {
     const idtaixe = req.params.idtaixe;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const oneWeekLater = new Date();
-    oneWeekLater.setDate(today.getDate() + 7);
-    oneWeekLater.setHours(23, 59, 59, 999);
-
     try {
+        // ================================
+        // 1) Tính ngày đầu tuần (Thứ 2) và ngày cuối tuần (Chủ nhật)
+        // ================================
+        const today = new Date();
+        const dow = today.getDay(); // Chủ nhật = 0, Thứ 2 = 1, ... Thứ 7 = 6
+
+        // Tính ngày Thứ 2 đầu tuần
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+        monday.setHours(0, 0, 0, 0);
+
+        // Tính ngày Chủ nhật cuối tuần
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+
+        console.log("📆 Tuần từ:", monday, "→", sunday);
+
+        // ================================
+        // 2) Truy vấn lịch trong tuần
+        // ================================
         const schedule = await LichChuyen.findAll({
             where: {
                 idtaixe,
-                ngaydi: { [Op.between]: [today, oneWeekLater] },
+                ngaydi: {
+                    [Op.between]: [monday, sunday], // Lọc trong tuần thực tế
+                },
             },
             attributes: [
                 "idlich",
@@ -219,6 +235,7 @@ export const getWeeklySchedule = async (req, res) => {
                 "giobatdau",
                 "danhsachhocsinh",
                 "trangthai",
+                // Lấy thứ trong tuần (1 = CN, 2 = Thứ 2, ...)
                 [Sequelize.fn("DAYOFWEEK", Sequelize.col("ngaydi")), "thu"],
             ],
             include: [
@@ -229,15 +246,12 @@ export const getWeeklySchedule = async (req, res) => {
                         "tentuyen",
                         "idtuyenduong",
                         "loaituyen",
-                        "dsdiemdung", // danh sách điểm dừng
+                        "dsdiemdung",
                     ],
-                    required: true,
                 },
                 {
                     model: XeBuyt,
-                    as: "busInfo",
-                    attributes: ["bienso"],
-                    required: true,
+                    attributes: ["bienso"], // xoá alias busInfo vì không có
                 }
             ],
             order: [
@@ -246,48 +260,68 @@ export const getWeeklySchedule = async (req, res) => {
             ]
         });
 
+        // ================================
+        // 3) Nếu không có lịch trong tuần
+        // ================================
         if (!schedule.length) {
             return res.status(200).json({
-                message: "Không có lịch trình nào trong 7 ngày tới.",
+                message: "Không có lịch của tuần hiện tại.",
                 schedule: []
             });
         }
 
+        // ================================
+        // 4) Format dữ liệu trả về
+        // ================================
         const formattedSchedule = schedule.map(item => {
+            // Parse danh sách học sinh
             const hs = item.danhsachhocsinh ? JSON.parse(item.danhsachhocsinh) : [];
-            const routeInfo = item.tuyenDuongInfo;
+            const soLuongHocSinh = Array.isArray(hs) ? hs.length : 0;
 
-            // Parse danh sách điểm dừng và đếm
+            const route = item.tuyenDuongInfo;
+
+            // Parse danh sách điểm dừng
             let dsDiemDung = [];
-            let soDiemDung = 0;
-            if (routeInfo?.dsdiemdung) {
+            if (route?.dsdiemdung) {
                 try {
-                    dsDiemDung = JSON.parse(routeInfo.dsdiemdung);
-                    soDiemDung = Array.isArray(dsDiemDung) ? dsDiemDung.length : 0;
+                    dsDiemDung = JSON.parse(route.dsdiemdung);
                 } catch (e) {
                     console.warn("❌ Lỗi parse dsdiemdung:", e);
                 }
             }
-            const soLuongHocSinh = Array.isArray(hs) ? hs.length : 0;
 
+            const soDiemDung = Array.isArray(dsDiemDung) ? dsDiemDung.length : 0;
 
             return {
                 idlich: item.idlich,
                 ngay: item.ngaydi,
                 thu: mapDayNumberToVietnamese(item.dataValues.thu),
-                tenTuyen: routeInfo?.tentuyen,
-                loaituyen: routeInfo?.loaituyen,
                 gioBatDau: item.giobatdau,
-                bienSoXe: item.busInfo?.bienso,
-                soDiemDung,        // số điểm dừng tính từ dsdiemdung
+
+                // Tuyến đường
+                tenTuyen: route?.tentuyen,
+                loaituyen: route?.loaituyen,
+                soDiemDung,
+
+                // Xe buýt
+                bienSoXe: item.XeBuyt?.bienso,
+
+                // Trạng thái & học sinh
                 trangThai: STATUS_MAP[item.trangthai] || "Không xác định",
-                soLuongHocSinh,    // số học sinh tính từ danhsachhocsinh
+                soLuongHocSinh
             };
         });
 
+        // ================================
+        // 5) Trả về API
+        // ================================
         return res.status(200).json({
-            message: "Lấy lịch trình hàng tuần thành công!",
-            schedule: formattedSchedule,
+            message: "Lấy lịch tuần hiện tại thành công!",
+            tuan: {
+                batDau: monday,
+                ketThuc: sunday
+            },
+            schedule: formattedSchedule
         });
 
     } catch (error) {
@@ -298,6 +332,7 @@ export const getWeeklySchedule = async (req, res) => {
         });
     }
 };
+
 const pointIds = (jsonString) => {
     if (!jsonString) return [];
     try {
