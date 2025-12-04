@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import MainLayout from "@/components/layout/MainLayout";
+import StudentDetailDialog from "@/components/StudentDetailDialog";
+
 import {
     Card,
     CardContent,
@@ -43,6 +45,10 @@ export default function SchedulesPage() {
     const [driverId, setDriverId] = useState(null);
     const [driverScheduleData, setDriverScheduleData] = useState([]);
     const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+
+    const [openStudentDialog, setOpenStudentDialog] = useState(false);
+    const [selectedTrip, setSelectedTrip] = useState(null);
+    const [isFetchingStudents, setIsFetchingStudents] = useState(false);
 
     const today = new Date().toISOString().split("T")[0];
     const userId = localStorage.getItem("idnguoidung"); // lấy id người dùng từ localStorage
@@ -129,6 +135,94 @@ export default function SchedulesPage() {
         console.log(`Xác nhận ca: ${tripId}`);
         // TODO: Gọi API xác nhận ca
     };
+
+    // hiện danh sách học sinh của tuyến
+    // const handleOpenStudentList = async (trip) => {
+    //     if (!trip) return;
+
+    //     const studentIds = trip.danhsachhocsinh || [];
+
+    //     if (!studentIds.length) {
+    //         alert("Chuyến này không có học sinh.");
+    //         return;
+    //     }
+    //     console.log("Danh sach hoc sinh", trip.danhsachhocsinh);
+
+    //     try {
+    //         setIsFetchingStudents(true);
+
+    //         // Nếu studentIds đã là số id, dùng luôn
+    //         const idsString = studentIds.join(",");
+
+    //         console.log("IDS STRING:", idsString);
+
+    //         const res = await axios.get(
+    //             "http://localhost:5001/schoolbus/driver/students-by-ids",
+    //             { params: { ids: idsString } }
+    //         );
+
+    //         console.log("API trả về:", res.data);
+
+    //         const students = Array.isArray(res.data.students) ? res.data.students : [];
+    //         setSelectedTrip({ ...trip, danhsachhocsinh_chi_tiet: students });
+    //         setOpenStudentDialog(true);
+
+    //     } catch (err) {
+    //         console.error("Lỗi lấy học sinh:", err);
+    //         alert("Không thể tải danh sách học sinh cho chuyến này.");
+    //     } finally {
+    //         setIsFetchingStudents(false);
+    //     }
+    // };
+    const handleOpenStudentList = async (trip) => {
+        if (!trip) return;
+
+        const studentIds = trip.danhsachhocsinh || [];
+
+        if (!studentIds.length) {
+            alert("Chuyến này không có học sinh.");
+            return;
+        }
+
+        try {
+            setIsFetchingStudents(true);
+
+            const idsString = studentIds.join(",");
+            const res = await axios.get(
+                "http://localhost:5001/schoolbus/driver/students-by-ids",
+                { params: { ids: idsString } }
+            );
+
+            const students = Array.isArray(res.data.students) ? res.data.students : [];
+
+            // Chuẩn hóa dữ liệu phụ huynh và điểm đón
+            const studentsWithInfo = students.map(s => ({
+                ...s,
+                parentInfo: s.phuHuynh
+                    ? {
+                        userInfo: {
+                            hoten: s.phuHuynh.hoten,
+                            sodienthoai: s.phuHuynh.sodienthoai
+                        },
+                        diachi: s.phuHuynh.diachi || ""
+                    }
+                    : null, diemDonMacDinh: s.diemDon || null,
+            }));
+
+            setSelectedTrip({ ...trip, danhsachhocsinh_chi_tiet: studentsWithInfo });
+            setOpenStudentDialog(true);
+
+            console.log("Danh sách học sinh chi tiết:", studentsWithInfo);
+
+        } catch (err) {
+            console.error("Lỗi lấy học sinh:", err);
+            alert("Không thể tải danh sách học sinh cho chuyến này.");
+        } finally {
+            setIsFetchingStudents(false);
+        }
+    };
+
+
 
     // Thống kê
     const stats = {
@@ -267,6 +361,7 @@ export default function SchedulesPage() {
                                 <TableHead>Xe</TableHead>
                                 <TableHead>Số Điểm Dừng</TableHead>
                                 <TableHead>Số HS</TableHead>
+                                <TableHead>Danh sách HS</TableHead>
                                 <TableHead>Trạng Thái</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -283,13 +378,22 @@ export default function SchedulesPage() {
                                     return (
                                         <TableRow key={trip.id} className={isToday ? "bg-blue-50" : ""}>
                                             <TableCell>{trip.thu}</TableCell>
-                                            <TableCell>{trip.ngay}</TableCell>
-                                            <TableCell>{trip.tenTuyen}</TableCell>
+                                            <TableCell>{trip.ngaydi}</TableCell>
+                                            <TableCell>{trip.tentuyen}</TableCell>
                                             <TableCell>{trip.loaituyen}</TableCell>
-                                            <TableCell>{trip.gioBatDau}</TableCell>
+                                            <TableCell>{trip.giobatdau}</TableCell>
                                             <TableCell>{trip.bienSoXe}</TableCell>
-                                            <TableCell>{trip.soDiemDung}</TableCell>
-                                            <TableCell>{trip.soLuongHocSinh}</TableCell>
+                                            <TableCell>{trip.sodiemdung}</TableCell>
+                                            <TableCell>{trip.soluonghocsinh}</TableCell>
+                                            <TableCell className="text-center">
+                                                <button
+
+                                                    onClick={() => handleOpenStudentList(trip)}
+                                                    className="text-blue-500 hover:text-blue-700 hover:underline"
+                                                >
+                                                    Xem danh sách
+                                                </button>
+                                            </TableCell>
                                             <TableCell>{getStatusBadge(trip.trangThai)}</TableCell>
                                         </TableRow>
                                     );
@@ -299,6 +403,11 @@ export default function SchedulesPage() {
                     </Table>
                 </CardContent>
             </Card>
+            <StudentDetailDialog
+                isOpen={openStudentDialog}
+                onClose={() => setOpenStudentDialog(false)}
+                trip={selectedTrip}
+            />
         </div>
     );
 }

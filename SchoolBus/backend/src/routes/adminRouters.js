@@ -10,7 +10,7 @@ import {
     getAllSchadules, addSchedule, updateSchedule, softDeleteSchedule,
     getAllRegisteredPickupPoints,addRegisteredPickupPoint,updateRegisteredPickupPoint,softDeleteRegisteredPickupPoint,
     getAllNotification, addNotification, updateNotification, deleteNotification,
-    getInfoDashboard,updateUser,changePassword
+    getInfoDashboard,updateUser,changePassword,editStudent,deleteStudent
 } from "../controllers/adminControllers.js";
 
 const router = express.Router();
@@ -18,6 +18,8 @@ const router = express.Router();
 /* STUDENTS */
 router.get("/get-all-students", getAllStudents);
 router.post("/add-student", upload.single("anhdaidien"), addStudent);
+router.delete("/delete-student/:idStudent", deleteStudent);
+router.put("/edit-student/:idStudent", upload.single("anhdaidien"), editStudent);
 
 /* VEHICLES */
 router.post("/add-vehicle", addVehicle);
