@@ -1,6 +1,5 @@
 import express from "express";
-import { updateDriver,getDriverById, getDriverIdByUserId, getCurrentTrip, putStudentStatus, putTripStatus, updateDriverLocation,getNotificationByUser} from "../controllers/driverControllers.js";
-import { getWeeklySchedule } from "../controllers/driverControllers.js";
+import { updateDriver,getDriverById,getWeeklySchedule, getDriverIdByUserId, getCurrentTrip, putStudentStatus, putTripStatus, updateDriverLocation,getNotificationByUser, addNotification} from "../controllers/driverControllers.js";
 
 // import { getDriverById } from "../controllers/driverControllers.js";
 // import { getDriverIdByUserId } from "../controllers/driverControllers.js";
@@ -17,5 +16,6 @@ router.put("/student-status", putStudentStatus);
 router.put("/trip-status", putTripStatus);
 router.put("/update-location", updateDriverLocation);
 router.get("/notification/:idnguoidung", getNotificationByUser)
+router.post('/add-notification', addNotification)
 
 export default router;

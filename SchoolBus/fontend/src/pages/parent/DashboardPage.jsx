@@ -141,7 +141,7 @@ export default function ParentDashboardPage() {
         
         if (!activeTrip) return;
 
-        const scheduleId = activeTrip.idlich;
+        // const scheduleId = activeTrip.idlich;
         const isGoTrip = activeTrip.tuyenDuongInfo?.loaituyen === "Đón";
 
         // 📍 Lấy thông tin điểm đón/trả của học sinh
@@ -160,63 +160,115 @@ export default function ParentDashboardPage() {
             }
         }
         
-        const handleVehiclePositionUpdate = (data) => {
-            console.log("📍 Parent nhận vị trí xe real-time:", data);
+        // Đặt hàm này bên ngoài handleVehiclePositionUpdate,
+// tốt nhất là ở đầu useEffect lắng nghe socket
+const sendNotificationToApi = async (title, content) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error("Không tìm thấy token để gửi thông báo API");
+            return;
+        }
+
+        const response = await fetch('http://localhost:5001/schoolbus/user/add-notification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Sử dụng token đã lưu trong LocalStorage
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+                tieude: title,
+                noidung: content,
+            }),
+        });
+
+        if (!response.ok) {
+            // Log chi tiết hơn nếu API trả về lỗi
+            const errorData = await response.json();
+            throw new Error(`API Response Error: ${response.statusText} - ${JSON.stringify(errorData)}`);
+        }
+        
+        const result = await response.json();
+        console.log("✅ Thông báo 'Xe sắp tới' đã được lưu vào DB:", result);
+
+    } catch (err) {
+        console.error("❌ Lỗi khi gửi thông báo API:", err.message);
+    }
+};
+
+
+const handleVehiclePositionUpdate = (data) => {
+    console.log("📍 Parent nhận vị trí xe real-time:", data);
+    
+    // Đảm bảo dữ liệu vị trí tồn tại
+    if (!data.vitrixe || !data.vitrixe.vido || !data.vitrixe.kinhdo) {
+        console.warn("Dữ liệu vị trí xe không đầy đủ.");
+        return;
+    }
+
+    const newLat = parseFloat(data.vitrixe.vido);
+    const newLng = parseFloat(data.vitrixe.kinhdo);
+
+    // Cập nhật vị trí xe
+    setBusesRealTimePosition((prev) => ({
+        ...prev,
+        [data.idxebuyt]: {
+            lat: newLat,
+            lng: newLng,
+            bienso: data.bienso,
+            timestamp: new Date().toLocaleTimeString('vi-VN')
+        }
+    }));
+
+    // ⭐ LOGIC THÔNG BÁO GẦN ĐIỂM ĐÓN - CHỈ GỬI MỘT LẦN
+    // Chỉ xử lý chuyến đi (goTrip) và nếu có điểm đón/trả và đúng xe đang theo dõi
+    if (isGoTrip && studentPickupPoint && data.idxebuyt === activeTrip.idxebuyt) {
+        const distance = calculateDistance(
+            newLat, 
+            newLng, 
+            studentPickupPoint.lat, 
+            studentPickupPoint.lng
+        );
+
+        console.log(`📏 Khoảng cách đến điểm đón: ${distance.toFixed(2)}km (Ngưỡng: ${THRESHOLD_DISTANCE_KM}km)`);
+
+        // ✅ Kiểm tra: nếu lần đầu vào vùng cảnh báo (dưới ngưỡng và không quá sát)
+        if (distance <= THRESHOLD_DISTANCE_KM && distance > 0.1) {
+            // Kiểm tra ref để xác định thông báo đã được gửi chưa
+            const scheduleId = activeTrip.idlich; // Đảm bảo biến scheduleId đã được khai báo
             
-            const newLat = parseFloat(data.vitrixe.vido);
-            const newLng = parseFloat(data.vitrixe.kinhdo);
+            if (!notificationSentRef.current[scheduleId]) {
+                console.log("🔔 Kích hoạt thông báo gần điểm đón!");
+                
+                const notificationTitle = "⏰ Xe sắp tới điểm đón!";
+                const notificationContent = `Xe ${data.bienso} còn cách điểm đón ~${distance.toFixed(2)}km tại ${studentPickupPoint.name}. Vui lòng chuẩn bị cho bé ra điểm đón!`;
 
-            // Cập nhật vị trí xe
-            setBusesRealTimePosition((prev) => ({
-                ...prev,
-                [data.idxebuyt]: {
-                    lat: newLat,
-                    lng: newLng,
-                    bienso: data.bienso,
-                    timestamp: new Date().toLocaleTimeString('vi-VN')
-                }
-            }));
+                // 1. Gửi toast notification (UI)
+                toast.warning(notificationTitle, {
+                    description: notificationContent,
+                    duration: 15000,
+                });
+                
+                // 2. GỌI API ĐỂ LƯU THÔNG BÁO VÀO DATABASE
+                sendNotificationToApi(notificationTitle, notificationContent);
 
-            // ⭐ LOGIC THÔNG BÁO GẦN ĐIỂM ĐÓN - CHỈ GỬI MỘT LẦN
-            if (isGoTrip && studentPickupPoint && data.idxebuyt === activeTrip.idxebuyt) {
-                const distance = calculateDistance(
-                    newLat, 
-                    newLng, 
-                    studentPickupPoint.lat, 
-                    studentPickupPoint.lng
-                );
-
-                console.log(`📏 Khoảng cách đến điểm đón: ${distance.toFixed(2)}km (Ngưỡng: ${THRESHOLD_DISTANCE_KM}km)`);
-
-                // ✅ Kiểm tra: nếu lần đầu vào vùng cảnh báo và chưa gửi thông báo
-                if (distance <= THRESHOLD_DISTANCE_KM && distance > 0.1) {
-                    // Kiểm tra ref để xác định thông báo đã được gửi chưa
-                    if (!notificationSentRef.current[scheduleId]) {
-                        console.log("🔔 Kích hoạt thông báo gần điểm đón!");
-                        
-                        // Gửi toast notification
-                        toast.warning("⏰ Xe sắp tới điểm đón!", {
-                            description: `Xe ${data.bienso} còn cách điểm đón ~${distance.toFixed(2)}km tại ${studentPickupPoint.name}. Vui lòng chuẩn bị cho bé ra điểm đón!`,
-                            duration: 15000,
-                        });
-                        
-                        // ⭐ Đánh dấu thông báo đã được gửi (dùng ref không trigger re-render)
-                        notificationSentRef.current[scheduleId] = true;
-                        
-                        // Cập nhật state để hiển thị thông báo trong card
-                        setTripNotifications((prev) => ({
-                            ...prev,
-                            [scheduleId]: {
-                                type: "pickup_alert",
-                                distance: distance.toFixed(2),
-                                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                            }
-                        }));
+                // 3. Đánh dấu thông báo đã được gửi (dùng ref không trigger re-render)
+                notificationSentRef.current[scheduleId] = true;
+                
+                // 4. Cập nhật state để hiển thị thông báo trong card (UI)
+                setTripNotifications((prev) => ({
+                    ...prev,
+                    [scheduleId]: {
+                        type: "pickup_alert",
+                        distance: distance.toFixed(2),
+                        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                     }
-                }
+                }));
             }
-        };
-
+        }
+    }
+};
         const handleTripStatusChange = (data) => {
             console.log("🚦 Parent nhận trạng thái chuyến:", data);
             
@@ -402,13 +454,9 @@ export default function ParentDashboardPage() {
                     event: isGoTrip ? "Xe xuất phát" : "Xe khởi hành từ trường",
                     icon: <Bus className="h-4 w-4 text-blue-600" />
                 },
+                
                 {
-                    time: "??:??",
-                    event: isGoTrip ? "Bé đã lên xe" : "Bé đã xuống xe",
-                    icon: <CheckCircle className="h-4 w-4 text-green-600" />
-                },
-                {
-                    time: "??:??",
+                    time: "06:50",
                     event: isGoTrip ? "Đến trường" : "Về đến nhà",
                     icon: <CheckCircle className="h-4 w-4 text-green-600" />
                 },
@@ -638,7 +686,7 @@ export default function ParentDashboardPage() {
 
             {/* Map + stops */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="md:col-span-2 h-[420px] p-0 overflow-hidden shadow-2xl">
+                <Card className="md:col-span-2 h-[420px] p-0 overflow-hidden shadow-2xl" style={{ zIndex: 1 }}>
                     <LeafletRoutingMap
                         routes={[
                             {
@@ -735,7 +783,7 @@ export default function ParentDashboardPage() {
                             <div className="flex items-center gap-2">
                                 <Bell className="h-5 w-5" /> Thông báo
                             </div>
-                            <Button variant="outline" size="sm">Xem tất cả</Button>
+                           
                         </CardTitle>
                     </CardHeader>
                     <CardContent>

@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { NguoiDung,PhuHuynh } from "../models/index.js";
+import { NguoiDung,PhuHuynh ,TaiXe} from "../models/index.js";
+
 // ---------------- ĐĂNG KÝ ----------------
 export const register = async (req, res) => {
   try {
-    const { hoten, dienthoai, email, diachi, matkhau } = req.body;
+    const { hoten, dienthoai, email, diachi,mabang, matkhau } = req.body;
 
     // Kiểm tra email tồn tại
     const existed = await NguoiDung.findOne({ where: { email } });
@@ -30,10 +31,18 @@ export const register = async (req, res) => {
       trangthai: 1, // Đang chờ phê duyệt
       anhdaidien,
     });
-    const newPhuHuynh = await PhuHuynh.create({
+    if(diachi){const newPhuHuynh = await PhuHuynh.create({
       idnguoidung: newUser.id,
       diachi: diachi,
+    });}
+    if(mabang){
+      await TaiXe.create({
+      idnguoidung: newUser.id,
+      mabang: mabang,
+      kinhnghiem:0
     });
+    }
+    
 
     res.status(201).json({
       message: "Đăng ký thành công!",

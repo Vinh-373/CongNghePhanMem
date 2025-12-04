@@ -131,8 +131,10 @@ export default function LoginPage() {
       subtitle="Login to your account to continue"
       sideTitle="Welcome Back!"
       sideDesc="To stay connected with us please login with your personal info"
-      sideButtonText="SIGN UP"
-      sideButtonLink="/schoolbus/register"
+      sideButtonText1="ĐK tài khoản PH"
+      sideButtonLink1="/schoolbus/register-parent"
+      sideButtonText2="ĐK tài khoản TX"
+      sideButtonLink2="/schoolbus/register-driver"
     >
       <form onSubmit={handleSubmit} className="w-full">
         {/* Email */}

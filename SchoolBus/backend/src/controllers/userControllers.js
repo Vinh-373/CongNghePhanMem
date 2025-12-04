@@ -481,6 +481,7 @@ export const getSchedulesByMyChildren = async (req, res) => {
     if (scheduleIds.length > 0) {
       thongBaoList = await ThongBao.findAll({
         where: { idlich: scheduleIds },
+        order: [['thoigiangui', 'DESC']]
         // attributes: ["idthongbao", "idlich", "noidung", "createdAt"]
       });
     }
@@ -596,20 +597,53 @@ export const addRegisteredPoint = async (req, res) => {
   }
 };
 export const addNotification = async (req, res) => {
-  try{
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "Chưa đăng nhập!" });
+    try {
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) {
+            return res.status(401).json({ message: "Chưa đăng nhập!" });
+        }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "schoolbus_secret_key");
-    const idnguoidung = decoded.id;
-    const { tieude, noidung } = req.body;
-    const newNotification = await ThongBao.create({idnguoidung,tieude,noidung});
-    res.status(201).json({
-            message: "Thêm thông báo thành công!",
-            newNotification
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "schoolbus_secret_key");
+        const idnguoidung = decoded.id;
+
+        // 1. SỬA LỖI CÚ PHÁP: Lấy dữ liệu từ req.body
+        const { tieude, noidung } = req.body;
+
+        // 2. KIỂM TRA DỮ LIỆU ĐẦU VÀO
+        if (!tieude || !noidung) {
+            return res.status(400).json({ message: "Thiếu tiêu đề hoặc nội dung thông báo!" });
+        }
+
+        // 3. TÌM PHỤ HUYNH
+        const parent = await PhuHuynh.findOne({
+            where: {
+                idnguoidung: idnguoidung
+            },
         });
+
+        // 4. KIỂM TRA PHỤ HUYNH TỒN TẠI
+        if (!parent) {
+            return res.status(404).json({ message: "Không tìm thấy thông tin phụ huynh!" });
+        }
+        
+        // 5. TẠO THÔNG BÁO
+        const notifications = await ThongBao.create({
+            idnguoigui: null, // Giả sử 0 là Hệ thống/Admin
+            idphuhuynh: parent.idphuhuynh,
+            tieude: tieude,
+            noidung: noidung,
+        });
+
+        // 6. TRẢ VỀ KẾT QUẢ
+        return res.status(201).json(notifications); // Dùng 201 Created cho hành động tạo mới
     } catch (error) {
         console.error("❌ Lỗi thêm thông báo:", error);
+        
+        // Xử lý lỗi JWT hết hạn/không hợp lệ
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn!", error: error.message });
+        }
+        
         res.status(500).json({
             message: "Lỗi máy chủ khi thêm thông báo!",
             error: error.message

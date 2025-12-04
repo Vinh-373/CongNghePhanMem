@@ -56,7 +56,7 @@ export default (sequelize, DataTypes) => {
     },
     idnguoigui:{
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     }
   }, {
     tableName: 'thongbao', // Tên bảng trong DB (tùy chọn)

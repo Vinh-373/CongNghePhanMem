@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import AuthLayout from "./AuthLayout";
 import { toast } from "sonner";
 
-export default function RegisterPage() {
+export default function RegisterDriverPage() {
   const [form, setForm] = useState({
     hoten: "",
     email: "",
     dienthoai: "",
-    diachi: "",
+    mabang: "",
+    // kinhnghiem: "",
     matkhau: "",
     anhdaidien: null, // ảnh lưu tạm
   });
@@ -44,7 +45,8 @@ export default function RegisterPage() {
     else if (!/^[0-9]{9,11}$/.test(form.dienthoai))
       newErrors.dienthoai = "Số điện thoại không hợp lệ.";
 
-    if (!form.diachi.trim()) newErrors.diachi = "Địa chỉ không được để trống.";
+    if (!form.mabang.trim()) newErrors.diachi = "Địa chỉ không được để trống.";
+    // if (!form.kinhnghiem.trim()) newErrors.diachi = "Kinh nghiệm không được để trống.";
 
     if (!form.matkhau.trim()) newErrors.matkhau = "Mật khẩu không được để trống.";
     else if (form.matkhau.length < 6)
@@ -67,7 +69,8 @@ export default function RegisterPage() {
       formData.append("hoten", form.hoten);
       formData.append("email", form.email);
       formData.append("dienthoai", form.dienthoai);
-      formData.append("diachi", form.diachi);
+      formData.append("mabang", form.mabang);
+      formData.append("kinhnghiem", 0);
       formData.append("matkhau", form.matkhau);
       formData.append("anhdaidien", form.anhdaidien);
 
@@ -88,7 +91,7 @@ export default function RegisterPage() {
         hoten: "",
         email: "",
         dienthoai: "",
-        diachi: "",
+        mabang: "",
         matkhau: "",
         anhdaidien: null,
       });
@@ -147,9 +150,9 @@ export default function RegisterPage() {
         )}
 
         <input
-          name="diachi"
+          name="mabang"
           type="text"
-          placeholder="Địa chỉ..."
+          placeholder="Mã bằng..."
           value={form.diachi}
           onChange={handleChange}
           className={`w-full bg-gray-100 px-6 py-3 mb-1 rounded-full outline-none focus:ring-2 ${

@@ -9,6 +9,11 @@ import { ListChecks, Truck, UserCheck, AlertTriangle, XCircle, Bell, Siren, Cloc
 import LeafletRoutingMap from "@/components/Map/GoogleMapDisplay";
 import { io } from "socket.io-client"; // ⭐ IMPORT SOCKET.IO
 
+// GIẢ ĐỊNH CÁC COMPONENT FORM ĐÃ ĐƯỢC IMPORT
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+
 const SOCKET_URL = "http://localhost:5001";
 
 // =========================================================================
@@ -35,10 +40,9 @@ const useRealTimeClock = () => {
 // =========================================================================
 
 const fetchCurrentTripData = async (idtaixe) => {
-    // ⭐ FIX: Thêm kiểm tra DRIVER ID
     if (!idtaixe) {
         console.warn("DRIVER ID chưa sẵn sàng. Bỏ qua fetchCurrentTripData.");
-        return { tripsToday: [] }; // Trả về cấu trúc rỗng hợp lệ
+        return { tripsToday: [] };
     }
     const response = await fetch(`${SOCKET_URL}/schoolbus/driver/current-trip/${idtaixe}`);
     if (!response.ok) {
@@ -48,6 +52,35 @@ const fetchCurrentTripData = async (idtaixe) => {
     return data;
 };
 
+// HÀM GỌI API THÊM THÔNG BÁO MỚI (NEW)
+const sendDriverNotificationAPI = async (idlich, idtaixe, tieude, noidung, loai) => {
+    const API_URL = `${SOCKET_URL}/schoolbus/driver/add-notification`;
+
+    // Giả định API backend chấp nhận idnguoigui là idtaixe
+    const payload = {
+        idlich,
+        idnguoigui: idtaixe,
+        tieude,
+        noidung,
+        loai, // 0: Khẩn cấp (Siren/Urgent), 1: Cảnh báo (Alert/Warning)
+
+    };
+
+    console.log("GỌI API THÊM THÔNG BÁO:", payload);
+
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Lỗi HTTP! Status: ${response.status}`);
+    }
+
+    return await response.json();
+};
 
 const updateTripStatusAPI = async (idlich, newStatus) => {
     const API_URL = `${SOCKET_URL}/schoolbus/driver/trip-status`;
@@ -55,9 +88,7 @@ const updateTripStatusAPI = async (idlich, newStatus) => {
         idlich: idlich,
         trangthai: newStatus
     };
-
-    console.log("GỌI API CẬP NHẬT TRẠNG THÁI CHUYẾN:", payload);
-
+    // ... (rest of updateTripStatusAPI logic)
     const response = await fetch(API_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -80,7 +111,7 @@ const updateStudentStatusAPI = async (idlich, idhocsinh, newStatus) => {
         idhocsinh: idhocsinh,
         loaitrangthai: newStatus
     };
-
+    // ... (rest of updateStudentStatusAPI logic)
     const response = await fetch(API_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -94,7 +125,6 @@ const updateStudentStatusAPI = async (idlich, idhocsinh, newStatus) => {
     return await response.json();
 }
 
-// ⭐ HÀM GỌI API CẬP NHẬT VỊ TRÍ XE (GỬI LÊN SERVER)
 const updateBusPositionAPI = async (idxebuyt, position) => {
     const API_URL = `${SOCKET_URL}/schoolbus/driver/update-location`;
 
@@ -103,8 +133,7 @@ const updateBusPositionAPI = async (idxebuyt, position) => {
         vido: position.vido,
         kinhdo: position.kinhdo
     };
-
-    console.log("GỌI API CẬP NHẬT VỊ TRÍ XE:", payload);
+    // ... (rest of updateBusPositionAPI logic)
     const response = await fetch(API_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -129,12 +158,33 @@ const getStatusMap = (loaitrangthai) => {
         case -1:
             return { text: "Vắng Mặt", color: "bg-red-100 text-red-700 border-red-300", icon: XCircle };
         case 2:
-            return { text: "Đã Tới",color: "bg-green-100 text-green-700 border-green-300", icon: CheckCircle };
+            return { text: "Đã Tới", color: "bg-green-100 text-green-700 border-green-300", icon: CheckCircle };
         default:
             return { text: "Chưa Rõ", color: "bg-gray-100 text-gray-500 border-gray-300", icon: AlertTriangle };
 
     }
 };
+
+const notifBadge = (loai) => {
+    if (loai === 0) {
+        return <Badge variant="destructive" className="bg-red-500 hover:bg-red-600">Khẩn Cấp</Badge>;
+    }
+    return <Badge variant="secondary" className="bg-yellow-500 hover:bg-yellow-600">Cảnh Báo</Badge>;
+};
+
+const formatToVietnamTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+        return new Date(timestamp).toLocaleTimeString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    } catch {
+        return 'Invalid Time';
+    }
+};
+
 
 const StudentRouteList = ({ students, handleCheckin, totalPicked, totalRemaining, totalMissing, isTripRunning }) => {
     const sortedStudents = useMemo(() => {
@@ -246,10 +296,15 @@ const DriverDashboard = () => {
     const [driverId, setDriverId] = useState(null);
     const DRIVER_ID = driverId;
 
-    // ⭐ STATE MỚI: Socket instance
+    // ⭐ STATE MỚI: Dữ liệu form báo cáo
+    const [reportForm, setReportForm] = useState({
+        tieude: '',
+        noidung: '',
+        loai: 1, // 1: Cảnh báo (mặc định), 0: Khẩn cấp
+    });
+
     const [socket, setSocket] = useState(null);
 
-    console.log(DRIVER_ID)
 
     useEffect(() => {
         const idnguoidung = localStorage.getItem("idnguoidung");
@@ -272,7 +327,6 @@ const DriverDashboard = () => {
     }, []);
 
     // ⭐ 1. KHỞI TẠO SOCKET CONNECTION
-    // ⭐ THÊM USEEFFECT NÀY SAU PHẦN KHAI BÁO STATE
     useEffect(() => {
         console.log("🔌 Đang kết nối Socket.IO...");
         const socketInstance = io(SOCKET_URL, {
@@ -304,7 +358,72 @@ const DriverDashboard = () => {
             socketInstance.disconnect();
         };
     }, []);
-    // ⭐ HÀM EMIT VỊ TRÍ XE QUA SOCKET (thay vì chỉ gọi API)
+
+    // ⭐ HÀM XỬ LÝ GỬI BÁO CÁO SỰ CỐ (NEW)
+    const handleReportSubmit = useCallback(async () => {
+        if (!tripData || !DRIVER_ID) {
+            toast.error("Lỗi", { description: "Không tìm thấy thông tin chuyến đi hoặc tài xế." });
+            return;
+        }
+
+        const { tieude, noidung, loai } = reportForm;
+
+        if (!tieude.trim() || !noidung.trim()) {
+            toast.warning("Thiếu thông tin", { description: "Vui lòng nhập cả tiêu đề và nội dung thông báo." });
+            return;
+        }
+
+        try {
+            const apiResponse = await sendDriverNotificationAPI(
+                tripData.idlich,
+                DRIVER_ID,
+                tieude,
+                noidung,
+                loai
+            );
+
+            // ⭐ EMIT SOCKET cho Admin/Parent
+            if (socket) {
+                socket.emit('newNotification', {
+                    idlich: tripData.idlich,
+                    tieude,
+                    noidung,
+                    loai
+                });
+            }
+
+            // ⭐ Cập nhật trạng thái local để hiển thị ngay trên UI
+            const newNotification = {
+                ...apiResponse.notification || {
+                    tieude,
+                    noidung,
+                    loai,
+                    thoigiangui: new Date().toISOString()
+                },
+                NguoiDung: { vaitro: 1, hoten: "Tài xế (Bạn)" } // Giả định thông tin người gửi
+            };
+
+            setTripData(prev => ({
+                ...prev,
+                thongbao: [newNotification, ...(prev.thongbao || [])]
+            }));
+
+            toast.success("Đã gửi báo cáo!", {
+                description: `Thông báo "${tieude}" đã được gửi thành công.`,
+                duration: 5000
+            });
+
+            // Reset form và đóng modal
+            setReportForm({ tieude: '', noidung: '', loai: 1 });
+            setIsReportModalOpen(false);
+
+        } catch (error) {
+            console.error("❌ Lỗi khi gửi báo cáo sự cố:", error);
+            toast.error("Lỗi Gửi Báo Cáo", { description: error.message });
+        }
+    }, [tripData, DRIVER_ID, reportForm, socket]);
+
+
     const emitBusPosition = useCallback((idxebuyt, position, bienso) => {
         if (!socket || !socket.connected) {
             console.warn("⚠️ Socket chưa kết nối, không thể emit");
@@ -322,7 +441,7 @@ const DriverDashboard = () => {
             bienso: bienso
         });
     }, [socket]);
-    // ⭐ HÀM GIẢ LẬP DI CHUYỂN XE (có emit socket)
+
     const simulateMoveBus = useCallback((currentTrip, currentIndex) => {
         if (!currentTrip || currentTrip.trangthai !== 1) {
             return { newTrip: currentTrip, newIndex: currentIndex, isFinished: false };
@@ -370,7 +489,7 @@ const DriverDashboard = () => {
     // ⭐ HÀM POLLING (CÓ EMIT SOCKET)
     const reFetchTripData = useCallback(async () => {
         if (!tripData || tripStatus !== 1 || !socket) return;
-
+        // ... (rest of reFetchTripData logic)
         try {
             const { newTrip, newIndex, isFinished } = simulateMoveBus(tripData, currentRouteIndex);
 
@@ -394,10 +513,10 @@ const DriverDashboard = () => {
                 await updateTripStatusAPI(newTrip.idlich, 2);
 
                 for (const student of newTrip.studentDetails) {
-                    if(student.trangThaiDonTra.loaitrangthai == 1){
+                    if (student.trangThaiDonTra.loaitrangthai === 1) {
                         await updateStudentStatusAPI(newTrip.idlich, student.mahocsinh, 2);
 
-                    }else if(student.trangThaiDonTra.loaitrangthai == 0){
+                    } else if (student.trangThaiDonTra.loaitrangthai === 0) {
                         await updateStudentStatusAPI(newTrip.idlich, student.mahocsinh, -1);
                     }
                 }
@@ -419,7 +538,8 @@ const DriverDashboard = () => {
         } catch (e) {
             console.error("❌ Lỗi khi polling:", e);
         }
-    }, [tripStatus, tripData, currentRouteIndex, simulateMoveBus, socket, emitBusPosition]); // ⭐ THÊM emitBusPosition
+    }, [tripStatus, tripData, currentRouteIndex, simulateMoveBus, socket, emitBusPosition]);
+
     // --- LẤY DỮ LIỆU CHUYẾN ĐI BAN ĐẦU ---
     useEffect(() => {
         const loadData = async () => {
@@ -454,15 +574,11 @@ const DriverDashboard = () => {
         if (DRIVER_ID) {
             loadData();
         }
-
-        // TRƯỚC: }, []);
-        // SAU:
-    }, [DRIVER_ID]); // ⭐ FIX: THÊM DRIVER_ID VÀO DEPENDENCY ARRAY
+    }, [DRIVER_ID]);
 
     // --- LOGIC POLLING VỊ TRÍ XE ---
     useEffect(() => {
         let intervalId;
-        // ⭐ SỬA: Thêm socket?.connected
         if (tripStatus === 1 && socket?.connected) {
             console.log(`⏰ Kích hoạt Polling vị trí xe: ${POLLING_INTERVAL}ms`);
             intervalId = setInterval(reFetchTripData, POLLING_INTERVAL);
@@ -474,15 +590,61 @@ const DriverDashboard = () => {
                 clearInterval(intervalId);
             }
         };
-    }, [tripStatus, reFetchTripData, POLLING_INTERVAL, socket]); // ⭐ THÊM socket
+    }, [tripStatus, reFetchTripData, POLLING_INTERVAL, socket]);
+
     // --- HÀM BẮT ĐẦU CHUYẾN ĐI ---
-    const handleStartTrip = useCallback(async () => {
-        if (!tripData || tripStatus !== 0 || !socket) return;
+    // --- HÀM BẮT ĐẦU CHUYẾN ĐI (handleStartTrip) ---
+const handleStartTrip = useCallback(async () => {
+    if (!tripData || tripStatus !== 0 || !DRIVER_ID) {
+        toast.error("Lỗi", { description: "Không tìm thấy thông tin chuyến đi hoặc tài xế." });
+        return;
+    }
 
-        try {
-            await updateTripStatusAPI(tripData.idlich, 1);
+    // ⭐ 1. LẤY THÔNG TIN USER TỪ LOCALSTORAGE
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+        toast.error("Lỗi xác thực", { description: "Không tìm thấy thông tin người dùng trong bộ nhớ cục bộ." });
+        return;
+    }
+    const user = JSON.parse(userStr);
+    const driverName = user.hoten || "Tài xế"; // Lấy tên tài xế
+    
+    try {
+        // 2. CẬP NHẬT TRẠNG THÁI CHUYẾN ĐI TRÊN DB
+        await updateTripStatusAPI(tripData.idlich, 1);
 
-            // ⭐ EMIT EVENT BẮT ĐẦU CHUYẾN
+        // 3. GỬI THÔNG BÁO XE BẮT ĐẦU CHẠY
+        const notificationTitle = "Xe đã bắt đầu chạy";
+        const notificationContent = `Xe ${tripData.xebuyt?.bienso || 'N/A'} do ${driverName} điều khiển đã khởi hành vào lúc ${new Date().toLocaleTimeString('vi-VN')}.`;
+        
+        const apiResponse = await sendDriverNotificationAPI(
+            tripData.idlich,
+            DRIVER_ID,
+            notificationTitle,
+            notificationContent,
+            1 // Loại 1: Cảnh báo/Thông báo thường
+        );
+        
+        // ⭐ 4. CẬP NHẬT THÔNG BÁO VÀO LOCAL STATE
+        const newNotification = {
+            // Sử dụng dữ liệu trả về từ API hoặc giả lập
+            ...apiResponse.notification || { 
+                tieude: notificationTitle, 
+                noidung: notificationContent, 
+                loai: 1, 
+                thoigiangui: new Date().toISOString() 
+            },
+            NguoiDung: { vaitro: user.vaitro || 1, hoten: driverName } 
+        };
+        
+        setTripData(prev => ({
+            ...prev,
+            thongbao: [newNotification, ...(prev.thongbao || [])]
+        }));
+
+
+        // 5. EMIT SOCKET VÀ CẬP NHẬT STATE TRẠNG THÁI
+        if(socket) {
             socket.emit('tripStatusChanged', {
                 idlich: tripData.idlich,
                 idxebuyt: tripData.idxebuyt,
@@ -490,39 +652,43 @@ const DriverDashboard = () => {
                 bienso: tripData.xebuyt?.bienso,
                 tentuyen: tripData.tuyenDuongInfo?.tentuyen
             });
-
-            setTripStatus(1);
-            setCurrentRouteIndex(0);
-
-            if (tripData.tuyenDuongInfo?.fullroutepolyline) {
-                const routePoints = JSON.parse(tripData.tuyenDuongInfo.fullroutepolyline);
-                if (routePoints.length > 0) {
-                    const initialPos = routePoints[0];
-                    const initialPosData = { vido: initialPos.lat, kinhdo: initialPos.lng };
-
-                    // ⭐ EMIT VỊ TRÍ BAN ĐẦU
-                    emitBusPosition(tripData.idxebuyt, initialPosData, tripData.xebuyt?.bienso);
-
-                    // Gọi API lưu DB
-                    await updateBusPositionAPI(tripData.idxebuyt, initialPosData);
-
-                    setTripData(prev => ({
-                        ...prev,
-                        trangthai: 1,
-                        xebuyt: {
-                            ...prev.xebuyt,
-                            vitrixe: initialPosData
-                        }
-                    }));
-                }
-            }
-
-            toast.success("CHUYẾN ĐI ĐÃ BẮT ĐẦU!");
-        } catch (error) {
-            console.error("Lỗi khi bắt đầu chuyến đi:", error);
-            toast.error("Lỗi Bắt Đầu Chuyến", { description: error.message });
         }
-    }, [tripData, tripStatus, socket, emitBusPosition]); // ⭐ THÊM emitBusPosition
+        
+        setTripStatus(1);
+        setCurrentRouteIndex(0);
+
+        // 6. CẬP NHẬT VỊ TRÍ BAN ĐẦU TRÊN MAP
+        if (tripData.tuyenDuongInfo?.fullroutepolyline) {
+            const routePoints = JSON.parse(tripData.tuyenDuongInfo.fullroutepolyline);
+            if (routePoints.length > 0) {
+                const initialPos = routePoints[0];
+                const initialPosData = { vido: initialPos.lat, kinhdo: initialPos.lng };
+
+                emitBusPosition(tripData.idxebuyt, initialPosData, tripData.xebuyt?.bienso);
+                await updateBusPositionAPI(tripData.idxebuyt, initialPosData);
+
+                setTripData(prev => ({
+                    ...prev,
+                    trangthai: 1,
+                    xebuyt: {
+                        ...prev.xebuyt,
+                        vitrixe: initialPosData
+                    }
+                }));
+            }
+        }
+
+        // ⭐ 7. TOAST THÀNH CÔNG CUỐI CÙNG
+        toast.success("CHUYẾN ĐI ĐÃ BẮT ĐẦU!", {
+            description: `Thông báo khởi hành đã được gửi thành công đến phụ huynh và điều hành.`,
+            duration: 5000
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi khi bắt đầu chuyến đi:", error);
+        toast.error("Lỗi Bắt Đầu Chuyến", { description: error.message });
+    }
+}, [tripData, tripStatus, DRIVER_ID, socket, emitBusPosition]);
 
     // --- HÀM CẬP NHẬT TRẠNG THÁI HỌC SINH ---
     const handleUpdateStudentStatus = useCallback(async (mahocsinh, newStatus) => {
@@ -530,7 +696,7 @@ const DriverDashboard = () => {
             toast.warning("Chuyến đi chưa bắt đầu!", { description: "Vui lòng bấm 'Bắt Đầu Chạy Tuyến' trước khi điểm danh." });
             return;
         }
-
+        // ... (rest of handleUpdateStudentStatus logic)
         if (!tripData) return;
 
         const studentToUpdate = tripData.studentDetails.find(s => s.mahocsinh === mahocsinh);
@@ -569,7 +735,7 @@ const DriverDashboard = () => {
     // --- CHUYỂN ĐỔI DỮ LIỆU SANG PROPS CỦA MAP ---
     const mapProps = useMemo(() => {
         if (!tripData) return { routes: [], buses: [], school: null };
-
+        // ... (rest of mapProps logic)
         const stops = tripData.tuyenDuongInfo?.diemDungDetails || [];
         const busPositionData = tripData.xebuyt?.vitrixe;
 
@@ -714,12 +880,12 @@ const DriverDashboard = () => {
             <Card className="mb-6 shadow-xl relative border-l-4 border-blue-600">
                 <CardContent className="p-0 flex flex-col lg:flex-row">
                     {/* Bản Đồ Leaflet */}
-                    <div className="flex-1" style={{ minHeight: '400px' }}>
+                    <div className="flex-1" style={{ minHeight: '400px',zIndex: 1 }}>
                         <LeafletRoutingMap
                             routes={mapProps.routes}
                             buses={mapProps.buses}
                             school={mapProps.school}
-                            zoom={13}
+                            // zoom={13}
                             defaultCenter={mapProps.defaultCenter}
                             setRealPolyline={setRealRoutePolyline}
                         />
@@ -753,7 +919,7 @@ const DriverDashboard = () => {
 
                 {/* PHẦN 3: THÔNG BÁO & SỰ CỐ */}
                 <div className="lg:col-span-1">
-                    <Card className="shadow-xl h-full">
+                    <Card className="shadow-xl h-full flex flex-col">
                         <CardHeader>
                             <CardTitle className="text-xl font-semibold text-gray-700 flex items-center">
                                 <Bell className="w-5 h-5 mr-2" />
@@ -763,22 +929,61 @@ const DriverDashboard = () => {
                                 Vui lòng kiểm tra các thông báo khẩn cấp hoặc sự cố cần báo cáo.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="flex items-start space-x-3 p-4 border border-green-300 rounded-lg bg-green-50 text-green-800">
-                                <CheckCircle className="h-5 w-5 mt-0.5 text-green-600 flex-shrink-0" />
-                                <div>
-                                    <p className="font-semibold text-green-700">Tình hình ổn định</p>
-                                    <p className="text-sm">
-                                        Hiện tại không có sự cố khẩn cấp hay cảnh báo ùn tắc nào trên tuyến đường.
-                                    </p>
+
+                        {/* --- NỘI DUNG THÔNG BÁO ĐỘNG --- */}
+                        <CardContent className="flex-1 max-h-[35vh] overflow-y-auto ">
+
+                            {tripData?.thongbao && tripData.thongbao.length > 0 ? (
+                                <div className="space-y-3">
+                                    {/* Hiển thị danh sách thông báo */}
+                                    {tripData.thongbao.map((n) => (
+                                        <div
+                                            key={n.idthongbao || Math.random()}
+                                            className={`flex items-start gap-3 p-3 rounded-lg border 
+                                ${n.loai === 0 ? 'border-red-300 bg-red-50 text-red-800' : 'border-yellow-300 bg-yellow-50 text-yellow-800'}
+                            `}
+                                        >
+                                            {n.loai === 0
+                                                ? <Bell className="h-5 w-5 mt-0.5 text-red-600 flex-shrink-0" />
+                                                : <XCircle className="h-5 w-5 mt-0.5 text-yellow-600 flex-shrink-0" />
+                                            }
+
+                                            <div className="flex-1">
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <p className="font-semibold text-sm">{n.tieude || "Thông báo hệ thống"}</p>
+                                                    <div className="flex-shrink-0">{notifBadge(n.loai)}</div>
+                                                </div>
+                                                <p className="text-xs">{n.noidung || "Nội dung đang được cập nhật..."}</p>
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                    {n.thoigiangui ? formatToVietnamTime(n.thoigiangui) : "Vừa xong"}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
+                            ) : (
+                                // --- HIỂN THỊ TRẠNG THÁI ỔN ĐỊNH KHI KHÔNG CÓ THÔNG BÁO NÀO ---
+                                <div className="flex items-start space-x-3 p-4 border border-green-300 rounded-lg bg-green-50 text-green-800">
+                                    <CheckCircle className="h-5 w-5 mt-0.5 text-green-600 flex-shrink-0" />
+                                    <div>
+                                        <p className="font-semibold text-green-700">Tình hình ổn định</p>
+                                        <p className="text-sm">
+                                            Hiện tại không có sự cố khẩn cấp hay cảnh báo nào trên tuyến đường.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
+                        {/* --- FOOTER (Nút Báo Cáo) --- */}
                         <CardFooter className="pt-0">
                             <Button
-                                className="w-full"
+                                className="w-full bg-amber-700"
                                 variant="destructive"
-                                onClick={() => setIsReportModalOpen(true)}
+                                onClick={() => {
+                                    // Reset form khi mở modal
+                                    setReportForm({ tieude: '', noidung: '', loai: 1 });
+                                    setIsReportModalOpen(true);
+                                }}
                                 disabled={tripStatus !== 1} // Chỉ báo cáo khi đang chạy
                             >
                                 <Siren className="w-4 h-4 mr-2" />
@@ -801,38 +1006,73 @@ const DriverDashboard = () => {
                 </div>
             </div>
 
-            {/* --- MODAL BÁO CÁO SỰ CỐ --- */}
+            {/* --- MODAL BÁO CÁO SỰ CỐ (ĐÃ CẬP NHẬT) --- */}
             <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[425px] bg-white ">
                     <DialogHeader>
                         <DialogTitle className="flex items-center text-xl text-red-600">
                             <Siren className="mr-2 h-5 w-5" />
-                            Báo Cáo Sự Cố
+                            Tạo Báo Cáo Sự Cố/Thông Báo
                         </DialogTitle>
                         <DialogDescription>
-                            Vui lòng chọn loại sự cố và cung cấp chi tiết để bộ phận quản lý hỗ trợ kịp thời.
+                            Gửi thông báo đến bộ phận điều hành và các phụ huynh khác.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className='py-4 space-y-3'>
-                        <Button variant="outline" className="w-full justify-start text-red-600 border-red-300">
-                            <AlertTriangle className='w-4 h-4 mr-2' /> Kẹt xe nghiêm trọng
-                        </Button>
-                        <Button variant="outline" className="w-full justify-start text-red-600 border-red-300">
-                            <Truck className='w-4 h-4 mr-2' /> Xe gặp trục trặc kỹ thuật
-                        </Button>
-                        <Button variant="outline" className="w-full justify-start text-red-600 border-red-300">
-                            <UserCheck className='w-4 h-4 mr-2' /> Sự cố liên quan đến học sinh
-                        </Button>
+                    <div className='py-4 space-y-4'>
+                        {/* INPUT TIÊU ĐỀ */}
+                        <div className="space-y-2">
+                            <Label htmlFor="title">Tiêu đề thông báo <span className="text-red-500">*</span></Label>
+                            <Input
+                                id="title"
+                                value={reportForm.tieude}
+                                onChange={(e) => setReportForm({ ...reportForm, tieude: e.target.value })}
+                                placeholder="Ví dụ: Kẹt xe tại đường X, Xe bị hỏng"
+                                maxLength={100}
+                            />
+                        </div>
+
+                        {/* INPUT NỘI DUNG */}
+                        <div className="space-y-2">
+                            <Label htmlFor="content">Nội dung chi tiết <span className="text-red-500">*</span></Label>
+                            <Textarea
+                                id="content"
+                                value={reportForm.noidung}
+                                onChange={(e) => setReportForm({ ...reportForm, noidung: e.target.value })}
+                                placeholder="Mô tả chi tiết sự cố và giải pháp nếu có."
+                                rows={4}
+                            />
+                        </div>
+
+                        {/* LOẠI THÔNG BÁO */}
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="urgent"
+                                checked={reportForm.loai === 0}
+                                onCheckedChange={(checked) => setReportForm({ ...reportForm, loai: checked ? 0 : 1 })}
+                                className="border-red-500 data-[state=checked]:bg-red-600"
+                            />
+                            <label
+                                htmlFor="urgent"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-red-600"
+                            >
+                                <AlertTriangle className='w-4 h-4 mr-1 inline-block' /> Đánh dấu KHẨN CẤP (Ưu tiên cao)
+                            </label>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button
-                            variant="destructive"
-                            onClick={() => {
-                                setIsReportModalOpen(false);
-                                toast.error("Đã gửi báo cáo!", { description: "Bộ phận điều hành đã nhận thông báo sự cố của bạn." });
-                            }}
+                            variant="outline"
+                            onClick={() => setIsReportModalOpen(false)}
                         >
-                            Gửi Báo Cáo
+                            Hủy
+                        </Button>
+                        <Button
+                            className={"bg-amber-700"}
+                            variant={reportForm.loai === 0 ? "destructive" : "default"}
+                            onClick={handleReportSubmit}
+                        >
+                            {reportForm.loai === 1 ? <Siren className='w-4 h-4 mr-2' /> : <Bell className='w-4 h-4 mr-2' />}
+                            Gửi Thông Báo
                         </Button>
                     </DialogFooter>
                 </DialogContent>

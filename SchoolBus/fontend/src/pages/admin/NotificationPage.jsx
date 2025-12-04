@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input"; // ✅ Import Input
 import {
     Bell,
     Send,
@@ -30,10 +31,11 @@ import {
     User,
     Car,
     MapPin,
-    AlertCircle
+    AlertCircle,
+    Search, // ✅ Import Search
 } from "lucide-react";
 import { toast } from "sonner";
-import AddEntityDialog from "@/components/AddEntityDialog"; // ✅ Import component thực
+import AddEntityDialog from "@/components/AddEntityDialog"; 
 
 const API_BASE_URL = "http://localhost:5001/schoolbus/admin";
 
@@ -43,6 +45,7 @@ export default function NotificationsPage() {
     const [error, setError] = useState(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editData, setEditData] = useState(null);
+    const [searchTerm, setSearchTerm] = useState(""); // ✅ Thêm state tìm kiếm
 
     const fetchNotifications = async () => {
         setIsLoading(true);
@@ -66,6 +69,18 @@ export default function NotificationsPage() {
     }, []);
 
     // ===== HÀM HỖ TRỢ =====
+
+    // ✅ Logic lọc danh sách (thêm mới)
+    const filteredNotifications = useMemo(() => {
+        if (!searchTerm) return notifications;
+        // Chuẩn hóa và chuyển đổi sang chữ thường để tìm kiếm không dấu
+        const lowerCaseSearchTerm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+        
+        return notifications.filter(noti =>
+            noti.tieude.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(lowerCaseSearchTerm) ||
+            noti.noidung.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(lowerCaseSearchTerm)
+        );
+    }, [notifications, searchTerm]);
 
     // Xác định loại thông báo
     const getNotificationType = (noti) => {
@@ -173,14 +188,12 @@ export default function NotificationsPage() {
     const tx = idTaixe ? parseInt(idTaixe) : null;
     const lich = idLich ? parseInt(idLich) : null;
 
-    console.log("🔍 determineVaitro input:", { ph, tx, lich });
-
     // Nếu có lịch chuyến -> không xác định vaitro (đặc biệt)
     if (lich !== null) {
         return { vaitro: null, ph: null, tx: null, lich };
     }
 
-    // Cả hai phụ huynh và tài xế đều = 0 -> toàn hệ thống (vaitro = 2)
+    // Cả hai phụ huynh và tài xế đều = 0 -> toàn hệ thống (vaitro = 0)
     if (ph === 0 && tx === 0) {
         return { vaitro: "0", ph: null, tx: null, lich: null };
     }
@@ -211,34 +224,41 @@ export default function NotificationsPage() {
 
 const handleSubmitDialog = async (data) => {
     try {
-        // // Xóa fields rỗng TRƯỚC khi xử lý
-        // if(data.idlichchuyen === "" || data.idlichchuyen === null) delete data.idlichchuyen;
-        // if(data.idphuhuynh === "" || data.idphuhuynh === null) delete data.idphuhuynh;
-        // if(data.idtaixe === "" || data.idtaixe === null) delete data.idtaixe;
-
-        // console.log("📝 Data sau khi xóa empty:", data);
-
-        // Xác định idvaitro dựa trên những field còn lại
+        // Xóa các trường trống không cần thiết trước khi xử lý
+        // Dùng giá trị null/"" làm giá trị không hợp lệ (không chọn)
+        const processData = { ...data };
+        for (const key of ['idphuhuynh', 'idtaixe', 'idlich']) {
+             // Chuyển đổi chuỗi rỗng thành null
+            if (processData[key] === "") {
+                processData[key] = null;
+            }
+        }
+        
+        // Lấy id người gửi từ localStorage
         const userStr = localStorage.getItem("user");
         if (!userStr) {
-            console.warn("⚠️ Không tìm thấy user trong localStorage");
-            return null;
+            toast.error("Lỗi: Không tìm thấy thông tin người dùng!");
+            return;
         }
         const user = JSON.parse(userStr);
-data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
-        const result = determineVaitro(data.idphuhuynh, data.idtaixe, data.idlich);
-        
-        console.log("🎯 Vaitro result:", result);
+        processData.idnguoigui = parseInt(user.id) || null;
 
-        // Gán giá trị vào data
+        // Xác định idvaitro dựa trên những field còn lại
+        const result = determineVaitro(processData.idphuhuynh, processData.idtaixe, processData.idlich);
+
+        // Gán giá trị đã chuẩn hóa vào data
         if (result.vaitro !== null && result.vaitro !== undefined) {
-            data.idvaitro = result.vaitro;
+            processData.idvaitro = result.vaitro;
+        } else {
+             // Nếu không có vai trò chung, xóa idvaitro
+            delete processData.idvaitro;
         }
-        data.idphuhuynh = result.ph;
-        data.idtaixe = result.tx;
-        data.idlich = result.lich;
-
-        console.log("✅ Final data to send:", data);
+        processData.idphuhuynh = result.ph;
+        processData.idtaixe = result.tx;
+        processData.idlich = result.lich;
+        
+        // Xóa idlichchuyen cũ (nếu có) và dùng idlich mới
+        if (processData.idlichchuyen) delete processData.idlichchuyen;
 
         let url = `${API_BASE_URL}/add-notification`;
         let method = "POST";
@@ -251,10 +271,13 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
         const res = await fetch(url, {
             method,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            body: JSON.stringify(processData),
         });
 
-        if (!res.ok) throw new Error("Lỗi lưu dữ liệu");
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.message || "Lỗi lưu dữ liệu");
+        }
 
         toast.success(editData ? "Cập nhật thông báo thành công" : "Tạo thông báo thành công");
         setIsDialogOpen(false);
@@ -284,22 +307,22 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
         { name: "tieude", label: "Tiêu đề", type: "text", required: true, placeholder: "Nhập tiêu đề" },
         { name: "noidung", label: "Nội dung", type: "text", required: true, placeholder: "Nhập nội dung" },
         {
-            name: "idphuhuynh", label: "Phụ huynh nhận", type: "text", 
-            
+            name: "idphuhuynh", label: "ID Phụ huynh nhận", type: "text", 
+            hint: "Để trống nếu gửi toàn bộ Tài xế hoặc Chuyến. Nhập ID cụ thể, hoặc 0 để gửi tất cả Phụ huynh.",
             required: false,
-            placeholder: "Nhập 0 để gửi tất cả"
+            placeholder: "ID phụ huynh (hoặc 0/trống)"
         },
         {
-            name: "idtaixe", label: "Tài xế nhận", type: "text", 
-            
+            name: "idtaixe", label: "ID Tài xế nhận", type: "text", 
+            hint: "Để trống nếu gửi toàn bộ Phụ huynh hoặc Chuyến. Nhập ID cụ thể, hoặc 0 để gửi tất cả Tài xế.",
             required: false,
-            placeholder: "Nhập 0 để gửi tất cả"
+            placeholder: "ID tài xế (hoặc 0/trống)"
         },
         {
-            name: "idlich", label: "Chuyến đi nhận", type: "text", 
-            
+            name: "idlich", label: "ID Lịch chuyến nhận", type: "text", 
+            hint: "Nếu điền, chỉ gửi cho người liên quan đến lịch chuyến này. Ưu tiên hơn ID Tài xế/Phụ huynh.",
             required: false,
-            placeholder: "nhập id lịch chuyến"
+            placeholder: "ID lịch chuyến"
         },
         {
             name: "loai", label: "Loại thông báo", type: "select", 
@@ -308,7 +331,8 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                 { value: 1, label: "Báo cáo sự cố" },
             ], 
             required: true,
-            placeholder: "Chọn loại"
+            placeholder: "Chọn loại",
+            defaultValue: editData ? editData.loai : 0, // Set default value
         },
         {
             name: "trangthai", label: "Trạng thái", type: "select", 
@@ -318,7 +342,8 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                 { value: -1, label: "Thất bại" },
             ], 
             required: true,
-            placeholder: "Chọn trạng thái"
+            placeholder: "Chọn trạng thái",
+            defaultValue: editData ? editData.trangthai : 0, // Set default value
         },
     ];
 
@@ -326,6 +351,8 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
 
     return (
         <div className="space-y-6 p-6">
+            <h1 className="text-3xl font-bold">Quản lý Thông báo</h1>
+
             {/* Thẻ thống kê */}
             <div className="grid gap-4 md:grid-cols-3">
                 <Card>
@@ -365,12 +392,26 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
 
             {/* Bảng thông báo */}
             <Card>
-                <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Danh sách Thông báo ({stats.total})</CardTitle>
-                    <Button onClick={() => handleOpenDialog(null)}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Tạo thông báo mới
-                    </Button>
+                <CardHeader>
+                    <div className="flex justify-between items-center mb-4">
+                        <CardTitle>Danh sách Thông báo ({filteredNotifications.length} / {stats.total})</CardTitle>
+                        <Button onClick={() => handleOpenDialog(null)} className="bg-blue-500 hover:bg-blue-600">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Tạo thông báo mới
+                        </Button>
+                    </div>
+
+                    {/* ✅ Thanh tìm kiếm (Thêm mới) */}
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                        <Input
+                            type="text"
+                            placeholder="Tìm kiếm theo Tiêu đề, Nội dung..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -397,7 +438,7 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {notifications.map(noti => {
+                                    {filteredNotifications.length > 0 ? filteredNotifications.map(noti => { // ✅ Sử dụng filteredNotifications
                                         const typeInfo = getNotificationType(noti);
                                         const TypeIcon = typeInfo.icon;
                                         const RecipientIcon = getRecipientIcon(noti);
@@ -413,14 +454,29 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                                                 </TableCell>
 
                                                 {/* Người gửi */}
-                                                <TableCell>
+                                                 <TableCell>
                                                     <div className="flex items-center gap-2 text-sm">
                                                         <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                                         <div className="flex flex-col text-xs">
                                                             <span className="font-medium">
-                                                                {noti.NguoiDung?.vaitro === 0 ? "Admin" : noti.NguoiDung?.vaitro === 1 ? "Tài xế" : "Phụ huynh"}
+                                                                {/* * KIỂM TRA ĐIỀU KIỆN: 
+                 * 1. Nếu noti.NguoiDung TỒN TẠI: Dùng logic vai trò (vaitro)
+                 * 2. Nếu noti.NguoiDung KHÔNG TỒN TẠI: Gán là "Hệ thống"
+                 */}
+                                                                {noti.NguoiDung
+                                                                    ? (noti.NguoiDung.vaitro === 0
+                                                                        ? "Admin"
+                                                                        : noti.NguoiDung.vaitro === 1
+                                                                            ? "Tài xế"
+                                                                            : "Phụ huynh")
+                                                                    : "Hệ thống"}
                                                             </span>
-                                                            <span className="text-muted-foreground">{noti.NguoiDung?.hoten || "N/A"}</span>
+                                                            <span className="text-muted-foreground">
+                                                                {/* Nếu là Hệ thống thì hiển thị text mô tả, nếu không thì hiển thị tên */}
+                                                                {noti.NguoiDung
+                                                                    ? (noti.NguoiDung.hoten || "N/A")
+                                                                    : "Thông báo tự động"}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </TableCell>
@@ -465,7 +521,13 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                                                 </TableCell>
                                             </TableRow>
                                         );
-                                    })}
+                                    }) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="text-center py-4 text-gray-500">
+                                                Không tìm thấy thông báo nào phù hợp với từ khóa "{searchTerm}".
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
@@ -478,7 +540,7 @@ data.idnguoigui = parseInt(user.id) || null; // Nếu không có, set null
                 isOpen={isDialogOpen}
                 onClose={() => setIsDialogOpen(false)}
                 title={editData ? "Sửa Thông báo" : "Tạo Thông báo mới"}
-                description="Điền thông tin thông báo"
+                description="Điền thông tin thông báo và đối tượng nhận"
                 fields={fields}
                 initialData={editData}
                 onSubmit={handleSubmitDialog}

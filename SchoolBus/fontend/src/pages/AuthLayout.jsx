@@ -6,8 +6,10 @@ export default function AuthLayout({
   children,
   sideTitle,
   sideDesc,
-  sideButtonText,
-  sideButtonLink,
+  sideButtonText1,
+  sideButtonLink1,
+  sideButtonText2,
+  sideButtonLink2,
   reverse = false, // thêm prop để đảo layout
 }) {
   return (
@@ -39,12 +41,24 @@ export default function AuthLayout({
           <h2 className="text-2xl font-bold">SCHOOL BUS</h2>
           <h3 className="text-3xl font-semibold mt-4">{sideTitle}</h3>
           <p className="text-center text-sm mt-3 px-8">{sideDesc}</p>
+          
+          {/* Nút 1: Luôn hiển thị (giả định luôn có props) */}
           <a
-            href={sideButtonLink}
+            href={sideButtonLink1}
             className="mt-6 px-8 py-2 border-2 border-white rounded-full font-semibold hover:bg-white hover:text-[#e9cf3f] transition"
           >
-            {sideButtonText}
+            {sideButtonText1}
           </a>
+
+          {/* ⭐ Nút 2: Chỉ hiển thị nếu cả sideButtonText2 VÀ sideButtonLink2 tồn tại */}
+          {sideButtonText2 && sideButtonLink2 && (
+            <a
+              href={sideButtonLink2}
+              className="mt-4 px-8 py-2 border-2 border-white rounded-full font-semibold hover:bg-white hover:text-[#e9cf3f] transition"
+            >
+              {sideButtonText2}
+            </a>
+          )}
         </div>
 
         {/* --- Cột form --- */}

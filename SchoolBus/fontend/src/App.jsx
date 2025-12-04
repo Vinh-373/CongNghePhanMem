@@ -24,6 +24,7 @@ import DiverAccount from "./pages/driver/AccountPage.jsx";
 import DriverNotifications from "./pages/driver/NotificationsPage.jsx";
 import PickupPointsPage from "./pages/admin/PickupPointsPage.jsx";
 import RegisterPointPage from "./pages/admin/RegisterPointPage.jsx";
+import RegisterDriverPage from "./pages/RegisterDriverPage.jsx";
 
 function App() {
   return (
@@ -32,7 +33,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Trang public */}
-          <Route path="/schoolbus/register" element={<Register />} />
+          <Route path="/schoolbus/register-parent" element={<Register />} />
+          <Route path="/schoolbus/register-driver" element={<RegisterDriverPage />} />
           <Route path="/schoolbus/login" element={<Login />} />
 
           {/* Layout chính cho admin */}

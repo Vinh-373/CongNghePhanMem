@@ -307,13 +307,14 @@ export default function DashboardPage() {
               )}
             </CardTitle>
           </CardHeader>
-          <div className="h-[calc(100%-60px)]">
+          <div className="h-[calc(100%-60px)]" style={{ zIndex: 1 }}>
             <LeafletRoutingMap
               routes={mapRoutesData}
               buses={busesData}
               school={{ lat: 10.788229, lng: 106.703970 }}
               zoom={12}
               className="w-full h-full"
+              
             />
           </div>
         </Card>

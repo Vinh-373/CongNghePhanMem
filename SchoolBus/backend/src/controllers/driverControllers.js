@@ -357,8 +357,10 @@ const parseStudentIds = (jsonString) => {
 
 export const getCurrentTrip = async (req, res) => {
     const idtaixe = req.params.idtaixe;
-    // Đảm bảo Op được khai báo hoặc import từ ORM
+    // GIẢ ĐỊNH: Các model và Op đã được import
     // const { Op } = require('sequelize'); 
+    // const { LichChuyen, TuyenDuong, XeBuyt, ViTriXe, DiemDung, HocSinh, TrangThaiDonTra, ThongBao, NguoiDung } = require('../models');
+
     const today = new Date();
     
     try {
@@ -377,7 +379,6 @@ export const getCurrentTrip = async (req, res) => {
                 },
                 {
                     model: XeBuyt,
-                   
                     include: [
                         {
                             model: ViTriXe,
@@ -389,7 +390,6 @@ export const getCurrentTrip = async (req, res) => {
                     required: true,
                 }
             ],
-
         });
 
         const tripIds = tripsToday.map(trip => trip.idlich);
@@ -437,6 +437,7 @@ export const getCurrentTrip = async (req, res) => {
         let pointMap = {};
         let studentMap = {};
         let statusMap = {};
+        let notificationMap = {}; // 🆕 Khởi tạo map Thông báo
         
         // a. Chi tiết Điểm dừng
         if (uniquePointIds.length > 0) {
@@ -452,7 +453,7 @@ export const getCurrentTrip = async (req, res) => {
         // b. Chi tiết Học sinh
         if (uniqueStudentIds.length > 0) {
             const studentsDetail = await HocSinh.findAll({
-                where: { mahocsinh: uniqueStudentIds }, // Giả định mahocsinh là khóa chính
+                where: { mahocsinh: uniqueStudentIds }, 
             });
             studentMap = studentsDetail.reduce((map, student) => {
                 map[student.mahocsinh] = student.toJSON(); 
@@ -460,21 +461,41 @@ export const getCurrentTrip = async (req, res) => {
             }, {});
         }
 
-        // c. Trạng thái Đón Trả 🆕
+        // c. Trạng thái Đón Trả 
         if (tripIds.length > 0 && uniqueStudentIds.length > 0) {
-            const statusDetails = await TrangThaiDonTra.findAll({ // Sử dụng Model TrangThaiDonTra
-
+            const statusDetails = await TrangThaiDonTra.findAll({ 
                 where: {
                     idlich: tripIds,
-                    idhocsinh: uniqueStudentIds // Giả định idhocsinh trong TrangThaiDonTra tương đương mahocsinh
+                    idhocsinh: uniqueStudentIds 
                 },
-                
-                // Có thể thêm order: [['createdAt', 'DESC']] để lấy trạng thái mới nhất
             });
             statusMap = statusDetails.reduce((map, status) => {
-                // Key kết hợp: 'idlich-idhocsinh'
                 const key = `${status.idlich}-${status.idhocsinh}`;
                 map[key] = status.toJSON(); 
+                return map;
+            }, {});
+        }
+        
+        // d. Thông báo (Notifications) 🆕
+        if (tripIds.length > 0) {
+            const notifications = await ThongBao.findAll({
+                where: { idlich: tripIds }, 
+                include: [{
+                    model: NguoiDung, // GIẢ ĐỊNH: Model NguoiDung được join với ThongBao
+                    as: 'NguoiDung', 
+                    attributes: ['vaitro', 'hoten'] 
+                }],
+                order: [['thoigiangui', 'DESC']], // Sắp xếp theo thời gian gửi mới nhất
+            });
+
+            // Nhóm thông báo theo idlich
+            notificationMap = notifications.reduce((map, noti) => {
+                const notiData = noti.toJSON();
+                const idlich = notiData.idlich;
+                if (!map[idlich]) {
+                    map[idlich] = [];
+                }
+                map[idlich].push(notiData);
                 return map;
             }, {});
         }
@@ -496,7 +517,7 @@ export const getCurrentTrip = async (req, res) => {
                 routeData.diemDungDetails = detailedPoints;
             }
 
-            // 4.2 Gắn chi tiết Học sinh và Trạng thái 🆕
+            // 4.2 Gắn chi tiết Học sinh và Trạng thái 
             if (tripData.danhsachhocsinh) {
                 const idsInTrip = parseStudentIds(tripData.danhsachhocsinh);
 
@@ -504,10 +525,10 @@ export const getCurrentTrip = async (req, res) => {
                     .map(id => {
                         const student = studentMap[id];
                         if (student) {
-                            // a. Gắn Trạng thái Đón Trả (Tra cứu bằng idlich và idhocsinh)
+                            // a. Gắn Trạng thái Đón Trả 
                             const statusKey = `${tripData.idlich}-${id}`;
                             const studentStatus = statusMap[statusKey] || {
-                                loaitrangthai: -1, // Đặt -1 hoặc 0 làm giá trị mặc định/chưa cập nhật
+                                loaitrangthai: -1, 
                                 dangcho: 0,
                                 lenxe: 0,
                                 dennoi: 0,
@@ -515,23 +536,17 @@ export const getCurrentTrip = async (req, res) => {
                                 vang: 0
                             }; 
                             student.trangThaiDonTra = studentStatus;
-                            
-                            // b. (Tùy chọn) Gắn chi tiết Điểm Đón của học sinh (nếu cần)
-                            // const diemDonId = student.iddiemdon;
-                            // if(diemDonId && pointMap[diemDonId]) {
-                            //     student.diemDonDetail = pointMap[diemDonId];
-                            // }
                         }
                         return student;
                     })
                     .filter(student => student);
 
                 tripData.studentDetails = detailedStudents;
-                
-                // Tùy chọn: Xóa chuỗi JSON ID nếu không cần thiết
-                // delete routeData.dsdiemdung; 
-                // delete tripData.danhsachhocsinh;
             }
+            
+            // 4.3 Gắn Thông báo 🆕
+            const idlich = tripData.idlich;
+            tripData.thongbao = notificationMap[idlich] || []; // Thêm mảng thông báo vào key 'thongbao'
             
             return tripData;
         });
@@ -622,37 +637,118 @@ export const updateDriverLocation = async (req, res) => {
 
 // Thông báo 
 export const getNotificationByUser = async (req, res) => {
-  try {
-    const { idnguoidung } = req.params;
+    try {
+        const { idnguoidung } = req.params;
 
-    if (!idnguoidung) {
-      return res.status(400).json({ message: "Thiếu idnguoidung" });
+        if (!idnguoidung) {
+            return res.status(400).json({ message: "Thiếu idnguoidung trong tham số yêu cầu." });
+        }
+
+        const userIdNum = parseInt(idnguoidung, 10);
+        if (isNaN(userIdNum)) {
+            return res.status(400).json({ message: "idnguoidung không hợp lệ." });
+        }
+        
+        // 1. Tìm ID Tài xế và Phụ huynh tương ứng với idnguoidung
+        // Việc này đảm bảo chúng ta có các khóa ngoại cần thiết để truy vấn ThongBao
+        const driver = await TaiXe.findOne({
+            where: { idnguoidung: userIdNum },
+            
+        });
+        
+        const notifications = await ThongBao.findAll({
+    where: {
+        trangthai: 1,
+        [Op.or]: [
+            { idtaixe: driver.idtaixe },
+            { idvaitro: "0" },
+            { idvaitro: "1" }
+        ]
+    },
+    include: [
+      {
+                    model: NguoiDung,
+         
+                    attributes: ['id', 'hoten', 'vaitro'],
+                    required: false
+                },
+        {
+            model: TaiXe,
+            include: [
+                {
+                    model: NguoiDung,
+                    as: "userInfo",
+                    attributes: ["id", "hoten", "vaitro"],
+                    required: false
+                }
+            ],
+            attributes: ["idtaixe"],
+            required: false,
+            where: {
+                idtaixe: {
+                    [Op.ne]: null
+                }
+            }
+        }
+    ],
+    
+    order: [["thoigiangui", "DESC"]] // Nếu muốn
+})
+        // 4. Trả về kết quả
+        return res.status(200).json({
+            message: "Lấy thông báo thành công",
+            notifications
+
+        });
+    } catch (error) {
+        console.error("Lỗi lấy thông báo:", error);
+        return res.status(500).json({
+            message: "Lỗi server khi lấy thông báo",
+            error: error.message,
+        });
     }
+};
+export const addNotification = async (req, res) => {
+    try {
+        const { 
+            idlich,        // ID Lịch trình (Trip ID)
+            idnguoigui,    // ID Người gửi (là idtaixe - Driver ID)
+            tieude,        // Tiêu đề
+            noidung,       // Nội dung
+            loai           // Loại thông báo (0: Khẩn cấp, 1: Cảnh báo)
+        } = req.body;
 
-    const userIdNum = parseInt(idnguoidung, 10);
-    if (isNaN(userIdNum)) {
-      return res.status(400).json({ message: "idnguoidung không hợp lệ" });
+        // 1. VALIDATION CƠ BẢN
+        if (!idlich || !idnguoigui || !tieude || !noidung || (loai === undefined || loai === null)) {
+            return res.status(400).json({ message: 'Thiếu thông tin bắt buộc: idlich, idnguoigui, tieude, noidung, hoặc loai.' });
+        }
+
+        // 2. CHUẨN BỊ DỮ LIỆU ĐỂ LƯU
+        const newNotificationData = {
+            idlich: idlich,
+            idnguoigui: idnguoigui,
+            tieude: tieude,
+            noidung: noidung,
+            loai: loai,
+          
+        };
+
+        // 3. GỌI SERVICE/MODEL ĐỂ LƯU VÀO DB
+        // ⭐ Giả định hàm createNotification trả về đối tượng thông báo vừa tạo
+        const createdNotification = await ThongBao.create(newNotificationData);
+
+        // 4. TRẢ VỀ RESPONSE THÀNH CÔNG
+        // Thông báo cho frontend rằng đã lưu thành công và trả về đối tượng đã tạo
+        return res.status(201).json({ 
+            message: 'Đã tạo thông báo và gửi đi thành công.',
+            notification: createdNotification // Đối tượng thông báo vừa tạo (bao gồm ID, timestamp)
+        });
+
+    } catch (error) {
+        console.error('Lỗi khi thêm thông báo/sự cố:', error);
+        return res.status(500).json({ 
+            message: 'Lỗi máy chủ nội bộ khi xử lý yêu cầu.',
+            error: error.message 
+        });
     }
-
-    const notifications = await ThongBao.findAll({
-      where: { idnguoidung: userIdNum },
-      order: [["thoigiangui", "DESC"]],
-    });
-
-    return res.status(200).json({
-      message: "Lấy thông báo thành công",
-      data: notifications.map((n) => ({
-        idthongbao: n.idthongbao,
-        tieude: n.tieude,
-        noidung: n.noidung,
-        thoigiangui: n.thoigiangui,   // nên trả thêm cho front-end
-      })),
-    });
-  } catch (error) {
-    console.error("Lỗi lấy thông báo:", error);
-    return res.status(500).json({
-      message: "Lỗi server khi lấy thông báo",
-      error: error.message,
-    });
-  }
 };
