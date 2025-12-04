@@ -7,6 +7,8 @@ export default (sequelize, DataTypes) => {
     namsinh: { type: DataTypes.DATE, allowNull: false },
     gioitinh: { type: DataTypes.STRING(10), allowNull: false },
     anhdaidien: { type: DataTypes.STRING(500), allowNull: false },
-    iddiemdon: { type: DataTypes.INTEGER, allowNull: true }
+    iddiemdon: { type: DataTypes.INTEGER, allowNull: true },
+    status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }
+
   });
 };

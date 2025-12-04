@@ -8,7 +8,10 @@ import { where, Op } from "sequelize";
 export const getAllStudents = async (req, res) => {
     try {
         const students = await HocSinh.findAll({
-            attributes: ['mahocsinh', 'hoten', 'lop', 'namsinh', 'gioitinh', 'anhdaidien'],
+            where:{
+                status : 1,
+            },
+            attributes: ['mahocsinh', 'hoten', 'lop', 'namsinh', 'gioitinh', 'anhdaidien','idphuhuynh', 'iddiemdon'],
             include: [
                 {
                     model: DiemDung,
@@ -87,6 +90,8 @@ export const addStudent = async (req, res) => {
         });
     }
 };
+
+
 export const getAllVehicles = async (req, res) => {
     try {
         const vehicles = await XeBuyt.findAll({
@@ -640,6 +645,113 @@ export const updateParent = async (req, res) => {
         });
     }
 };
+
+// Chỉnh sửa thông tin học sinh 
+export const editStudent = async (req, res) => {
+    // Lấy ID học sinh từ params
+    const studentId = req.params.idStudent; // cần giống với api
+
+    try {
+        const { hoten, lop, namsinh, gioitinh, iddiemdon, idphuhuynh } = req.body;
+
+        // 1. Tìm học sinh theo ID
+        const student = await HocSinh.findByPk(studentId);
+
+        if (!student) {
+            return res.status(404).json({ message: "Không tìm thấy học sinh để chỉnh sửa!" });
+        }
+
+        // 2. Chuẩn bị dữ liệu cập nhật
+        const updateData = {
+            hoten,
+            lop,
+            namsinh,
+            gioitinh,
+            iddiemdon: iddiemdon || null,
+            idphuhuynh: idphuhuynh || null
+        };
+
+        // 3. Xử lý tệp ảnh mới (nếu có)
+        if (req.file) {
+            const uploadDir = path.join(process.cwd(), "src/uploads/avatars");
+            const filename = Date.now() + "_" + req.file.originalname;
+            const filepath = path.join(uploadDir, filename);
+
+            // Đảm bảo thư mục tồn tại (như trong addStudent)
+            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+            // Di chuyển file tạm thời vào thư mục uploads
+            fs.renameSync(req.file.path, filepath);
+
+            // Xóa ảnh cũ (nếu có và không phải là ảnh mặc định)
+            if (student.anhdaidien) {
+                const oldFilePath = path.join(uploadDir, student.anhdaidien);
+                // Kiểm tra file cũ tồn tại trước khi xóa
+                if (fs.existsSync(oldFilePath)) {
+                    fs.unlinkSync(oldFilePath);
+                }
+            }
+
+            // Cập nhật tên file ảnh mới vào dữ liệu
+            updateData.anhdaidien = filename;
+        }
+
+        // 4. Cập nhật bản ghi trong cơ sở dữ liệu
+        await student.update(updateData);
+
+        // 5. Trả về kết quả thành công
+        res.status(200).json({
+            message: "Cập nhật thông tin học sinh thành công!",
+            student: student // Trả về thông tin học sinh sau khi đã cập nhật
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi chỉnh sửa học sinh:", error);
+        res.status(500).json({
+            message: "Lỗi máy chủ khi chỉnh sửa học sinh!",
+            error: error.message
+        });
+    }
+};
+
+// xóa học sinh
+export const deleteStudent = async (req, res) => {
+    const studentId = req.params.idStudent;
+
+    try {
+        // 1. Tìm học sinh theo ID
+        const student = await HocSinh.findByPk(studentId);
+
+        if (!student) {
+            return res.status(404).json({ message: "Không tìm thấy học sinh để xóa!" });
+        }
+
+        // 2. Kiểm tra trạng thái hiện tại (Tùy chọn: Đảm bảo chưa bị xóa mềm)
+        if (student.status === -1) {
+            return res.status(400).json({ message: "Học sinh này đã bị xóa mềm trước đó!" });
+        }
+
+        // 3. Cập nhật trường status thành -1 (Soft Delete)
+        await student.update({
+            status: -1
+        });
+
+        // 4. Trả về kết quả thành công
+        res.status(200).json({
+            message: `Xóa mềm (cập nhật status thành -1) cho học sinh có ID ${studentId} thành công!`,
+            student: student // Trả về thông tin học sinh sau khi đã cập nhật
+        });
+
+    } catch (error) {
+        // Xử lý lỗi trong quá trình thực thi
+        console.error("❌ Lỗi xóa mềm học sinh:", error);
+        res.status(500).json({
+            message: "Lỗi máy chủ khi thực hiện xóa mềm học sinh!",
+            error: error.message
+        });
+    }
+};
+
 export const deleteParent = async (req, res) => {
     try {
         const { id } = req.params;

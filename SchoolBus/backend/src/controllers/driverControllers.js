@@ -1,6 +1,6 @@
 import { TaiXe, NguoiDung } from "../models/index.js";
 import sequelize from "../config/sequelize.js";
-import { LichChuyen, TuyenDuong, XeBuyt, DiemDung, HocSinh, TrangThaiDonTra, ViTriXe , ThongBao} from '../models/index.js';
+import { LichChuyen, TuyenDuong, XeBuyt, DiemDung, HocSinh, TrangThaiDonTra, ViTriXe, ThongBao, PhuHuynh } from '../models/index.js';
 import { Op, Sequelize } from 'sequelize'; // Import Op và Sequelize
 
 /**
@@ -276,8 +276,7 @@ export const getWeeklySchedule = async (req, res) => {
         const formattedSchedule = schedule.map(item => {
             // Parse danh sách học sinh
             const hs = item.danhsachhocsinh ? JSON.parse(item.danhsachhocsinh) : [];
-            const soLuongHocSinh = Array.isArray(hs) ? hs.length : 0;
-
+            const soluonghocsinh = Array.isArray(hs) ? hs.length : 0;
             const route = item.tuyenDuongInfo;
 
             // Parse danh sách điểm dừng
@@ -290,25 +289,27 @@ export const getWeeklySchedule = async (req, res) => {
                 }
             }
 
-            const soDiemDung = Array.isArray(dsDiemDung) ? dsDiemDung.length : 0;
+            const sodiemdung = Array.isArray(dsDiemDung) ? dsDiemDung.length : 0;
+
 
             return {
                 idlich: item.idlich,
-                ngay: item.ngaydi,
+                ngaydi: item.ngaydi,
                 thu: mapDayNumberToVietnamese(item.dataValues.thu),
-                gioBatDau: item.giobatdau,
+                giobatdau: item.giobatdau,
 
                 // Tuyến đường
-                tenTuyen: route?.tentuyen,
+                tentuyen: route?.tentuyen,
                 loaituyen: route?.loaituyen,
-                soDiemDung,
+                sodiemdung,
 
                 // Xe buýt
                 bienSoXe: item.XeBuyt?.bienso,
 
                 // Trạng thái & học sinh
                 trangThai: STATUS_MAP[item.trangthai] || "Không xác định",
-                soLuongHocSinh
+                soluonghocsinh,
+                danhsachhocsinh: hs
             };
         });
 
@@ -332,6 +333,169 @@ export const getWeeklySchedule = async (req, res) => {
         });
     }
 };
+
+// Lấy danh sách học sinh theo từng chuyến cho dialog
+export const getStudentsByIds = async (req, res) => {
+    try {
+        const { ids } = req.query;
+        if (!ids || ids.trim() === "") {
+            return res.status(400).json({ message: "Chưa cung cấp danh sách IDs học sinh", students: [] });
+        }
+
+        const idsArray = ids
+            .split(",")
+            .map(id => parseInt(id))
+            .filter(id => !isNaN(id));
+
+        if (idsArray.length === 0) {
+            return res.status(400).json({ message: "Danh sách IDs học sinh không hợp lệ", students: [] });
+        }
+
+        const students = await HocSinh.findAll({
+            where: { mahocsinh: { [Op.in]: idsArray } },
+            attributes: ["mahocsinh", "hoten", "lop", "namsinh", "gioitinh", "anhdaidien", "idphuhuynh", "iddiemdon"],
+            include: [
+                {
+                    model: PhuHuynh,
+                    as: "parentInfo",
+                    attributes: ["idphuhuynh"],
+                    include: [
+                        {
+                            model: NguoiDung,
+                            as: "userInfo",
+                            attributes: ["hoten", "sodienthoai"]
+                        }
+                    ]
+                },
+                {
+                    model: DiemDung,
+                    as: "diemDonMacDinh",
+                    attributes: ["tendiemdon"]
+                }
+            ]
+        });
+
+        const formattedStudents = students.map(s => ({
+            mahocsinh: s.mahocsinh,
+            hoten: s.hoten,
+            lop: s.lop,
+            namsinh: s.namsinh,
+            gioitinh: s.gioitinh,
+            anhdaidien: s.anhdaidien,
+            phuHuynh: s.parentInfo?.userInfo
+                ? {
+                    hoten: s.parentInfo.userInfo.hoten,
+                    sodienthoai: s.parentInfo.userInfo.sodienthoai
+                }
+                : null,
+            diemDon: s.diemDonMacDinh ? { tendiemdon: s.diemDonMacDinh.tendiemdon } : null
+        }));
+
+        return res.status(200).json({ message: "Lấy danh sách học sinh thành công!", students: formattedStudents });
+
+    } catch (error) {
+        console.error("❌ Lỗi khi lấy danh sách học sinh:", error);
+        return res.status(500).json({ message: "Lỗi máy chủ khi lấy danh sách học sinh", error: error.message });
+    }
+};
+
+
+// export const getStudentsByIds = async (req, res) => {
+//     try {
+//         const { ids } = req.query;
+
+//         if (!ids || ids.trim() === "") {
+//             return res.status(400).json({
+//                 message: "Chưa cung cấp danh sách IDs học sinh",
+//                 students: []
+//             });
+//         }
+
+//         // "7,8,9" => [7, 8, 9]
+//         const idsArray = ids
+//             .split(",")
+//             .map(id => parseInt(id))
+//             .filter(id => !isNaN(id));
+
+//         if (idsArray.length === 0) {
+//             return res.status(400).json({
+//                 message: "Danh sách IDs học sinh không hợp lệ",
+//                 students: []
+//             });
+//         }
+
+//         const students = await HocSinh.findAll({
+//             where: {
+//                 mahocsinh: { [Op.in]: idsArray }
+//             },
+//             attributes: [
+//                 "mahocsinh",
+//                 "hoten",
+//                 "lop",
+//                 "namsinh",
+//                 "gioitinh",
+//                 "anhdaidien"
+//             ],
+//             include: [
+//                 // Lấy thông tin phụ huynh + người dùng
+//                 {
+//                     model: PhuHuynh,
+//                     as: "parentInfo",
+//                     attributes: ["idphuhuynh"],
+//                     include: [
+//                         {
+//                             model: NguoiDung,
+//                             as: "userInfo",
+//                             attributes: ["hoten", "sodienthoai"]
+//                         }
+//                     ]
+//                 },
+//                 // Lấy thông tin điểm dừng
+//                 {
+//                     model: DiemDung,
+//                     as: "diemDonMacDinh",
+//                     attributes: ["tendiemdon"]
+//                 }
+//             ]
+//         });
+
+//         if (!students.length) {
+//             return res.status(200).json({
+//                 message: "Không tìm thấy học sinh nào",
+//                 students: []
+//             });
+//         }
+
+//         // Format dữ liệu
+//         const formattedStudents = students.map(s => ({
+//             mahocsinh: s.mahocsinh,
+//             hoten: s.hoten,
+//             lop: s.lop,
+//             namsinh: s.namsinh,
+//             gioitinh: s.gioitinh,
+//             anhdaidien: s.anhdaidien,
+//             phuHuynh: s.phuHuynh?.userInfo
+//                 ? {
+//                     hoten: s.phuHuynh.userInfo.hoten,
+//                     sodienthoai: s.phuHuynh.userInfo.sodienthoai
+//                 }
+//                 : null,
+//             diemDon: s.diemDonMacDinh ? { tendiemdon: s.diemDonMacDinh.tendiemdon } : null
+//         }));
+
+//         return res.status(200).json({
+//             message: "Lấy danh sách học sinh thành công!",
+//             students: formattedStudents
+//         });
+
+//     } catch (error) {
+//         console.error("❌ Lỗi khi lấy danh sách học sinh:", error);
+//         return res.status(500).json({
+//             message: "Lỗi máy chủ khi lấy danh sách học sinh",
+//             error: error.message
+//         });
+//     }
+// };
 
 const pointIds = (jsonString) => {
     if (!jsonString) return [];
@@ -360,13 +524,13 @@ export const getCurrentTrip = async (req, res) => {
     // Đảm bảo Op được khai báo hoặc import từ ORM
     // const { Op } = require('sequelize'); 
     const today = new Date();
-    
+
     try {
         // 1. TRUY VẤN TẤT CẢ CHUYẾN ĐI TRONG NGÀY
         const tripsToday = await LichChuyen.findAll({
             where: {
                 idtaixe,
-                ngaydi: { [Op.eq]: today.toISOString().split('T')[0] } 
+                ngaydi: { [Op.eq]: today.toISOString().split('T')[0] }
             },
             include: [
                 {
@@ -377,7 +541,7 @@ export const getCurrentTrip = async (req, res) => {
                 },
                 {
                     model: XeBuyt,
-                   
+
                     include: [
                         {
                             model: ViTriXe,
@@ -393,7 +557,7 @@ export const getCurrentTrip = async (req, res) => {
         });
 
         const tripIds = tripsToday.map(trip => trip.idlich);
-        
+
         // Thoát sớm nếu không tìm thấy chuyến đi
         if (tripsToday.length === 0) {
             return res.status(200).json({
@@ -408,10 +572,10 @@ export const getCurrentTrip = async (req, res) => {
 
         let allPointIds = new Set();
         let allStudentIds = new Set();
-        
+
         tripsToday.forEach(trip => {
             const tripData = trip.toJSON();
-            
+
             // a. Điểm dừng
             const dsdiemdungString = tripData.tuyenDuongInfo?.dsdiemdung;
             if (dsdiemdungString) {
@@ -429,7 +593,7 @@ export const getCurrentTrip = async (req, res) => {
 
         const uniquePointIds = Array.from(allPointIds);
         const uniqueStudentIds = Array.from(allStudentIds);
-        
+
         // =======================================================
         // 3. TRUY VẤN CHI TIẾT DỮ LIỆU CHUNG (Batch Queries)
         // =======================================================
@@ -437,14 +601,14 @@ export const getCurrentTrip = async (req, res) => {
         let pointMap = {};
         let studentMap = {};
         let statusMap = {};
-        
+
         // a. Chi tiết Điểm dừng
         if (uniquePointIds.length > 0) {
             const pointsDetail = await DiemDung.findAll({
                 where: { iddiemdung: uniquePointIds },
             });
             pointMap = pointsDetail.reduce((map, point) => {
-                map[point.iddiemdung] = point.toJSON(); 
+                map[point.iddiemdung] = point.toJSON();
                 return map;
             }, {});
         }
@@ -455,7 +619,7 @@ export const getCurrentTrip = async (req, res) => {
                 where: { mahocsinh: uniqueStudentIds }, // Giả định mahocsinh là khóa chính
             });
             studentMap = studentsDetail.reduce((map, student) => {
-                map[student.mahocsinh] = student.toJSON(); 
+                map[student.mahocsinh] = student.toJSON();
                 return map;
             }, {});
         }
@@ -468,13 +632,13 @@ export const getCurrentTrip = async (req, res) => {
                     idlich: tripIds,
                     idhocsinh: uniqueStudentIds // Giả định idhocsinh trong TrangThaiDonTra tương đương mahocsinh
                 },
-                
+
                 // Có thể thêm order: [['createdAt', 'DESC']] để lấy trạng thái mới nhất
             });
             statusMap = statusDetails.reduce((map, status) => {
                 // Key kết hợp: 'idlich-idhocsinh'
                 const key = `${status.idlich}-${status.idhocsinh}`;
-                map[key] = status.toJSON(); 
+                map[key] = status.toJSON();
                 return map;
             }, {});
         }
@@ -492,7 +656,7 @@ export const getCurrentTrip = async (req, res) => {
                 const idsInRoute = pointIds(routeData.dsdiemdung);
                 const detailedPoints = idsInRoute
                     .map(id => pointMap[id])
-                    .filter(point => point); 
+                    .filter(point => point);
                 routeData.diemDungDetails = detailedPoints;
             }
 
@@ -513,9 +677,9 @@ export const getCurrentTrip = async (req, res) => {
                                 dennoi: 0,
                                 trasan: 0,
                                 vang: 0
-                            }; 
+                            };
                             student.trangThaiDonTra = studentStatus;
-                            
+
                             // b. (Tùy chọn) Gắn chi tiết Điểm Đón của học sinh (nếu cần)
                             // const diemDonId = student.iddiemdon;
                             // if(diemDonId && pointMap[diemDonId]) {
@@ -527,12 +691,12 @@ export const getCurrentTrip = async (req, res) => {
                     .filter(student => student);
 
                 tripData.studentDetails = detailedStudents;
-                
+
                 // Tùy chọn: Xóa chuỗi JSON ID nếu không cần thiết
                 // delete routeData.dsdiemdung; 
                 // delete tripData.danhsachhocsinh;
             }
-            
+
             return tripData;
         });
 
@@ -541,7 +705,7 @@ export const getCurrentTrip = async (req, res) => {
             message: "Lấy thông tin chuyến đi trong ngày của tài xế thành công!",
             tripsToday: finalTrips,
         });
-        
+
     } catch (error) {
         console.error("❌ Lỗi lấy thông tin chuyến đi trong ngày:", error);
         return res.status(500).json({
@@ -551,11 +715,11 @@ export const getCurrentTrip = async (req, res) => {
     }
 };
 export const putStudentStatus = async (req, res) => {
-    const { idlich, idhocsinh, loaitrangthai} = req.body;
+    const { idlich, idhocsinh, loaitrangthai } = req.body;
     try {
         const [status, created] = await TrangThaiDonTra.findOrCreate({
             where: { idlich, idhocsinh },
-            
+
         });
         status.loaitrangthai = loaitrangthai;
         await status.save();
@@ -572,7 +736,7 @@ export const putStudentStatus = async (req, res) => {
     }
 };
 export const putTripStatus = async (req, res) => {
-    const { idlich, trangthai} = req.body;
+    const { idlich, trangthai } = req.body;
     try {
         const trip = await LichChuyen.findByPk(idlich);
         if (!trip) {
@@ -582,7 +746,7 @@ export const putTripStatus = async (req, res) => {
         }
         trip.trangthai = trangthai;
         await trip.save();
-        return res.status(200).json({   
+        return res.status(200).json({
             message: "Cập nhật trạng thái chuyến đi thành công!",
             trip,
         });
@@ -622,37 +786,37 @@ export const updateDriverLocation = async (req, res) => {
 
 // Thông báo 
 export const getNotificationByUser = async (req, res) => {
-  try {
-    const { idnguoidung } = req.params;
+    try {
+        const { idnguoidung } = req.params;
 
-    if (!idnguoidung) {
-      return res.status(400).json({ message: "Thiếu idnguoidung" });
+        if (!idnguoidung) {
+            return res.status(400).json({ message: "Thiếu idnguoidung" });
+        }
+
+        const userIdNum = parseInt(idnguoidung, 10);
+        if (isNaN(userIdNum)) {
+            return res.status(400).json({ message: "idnguoidung không hợp lệ" });
+        }
+
+        const notifications = await ThongBao.findAll({
+            where: { idnguoidung: userIdNum },
+            order: [["thoigiangui", "DESC"]],
+        });
+
+        return res.status(200).json({
+            message: "Lấy thông báo thành công",
+            data: notifications.map((n) => ({
+                idthongbao: n.idthongbao,
+                tieude: n.tieude,
+                noidung: n.noidung,
+                thoigiangui: n.thoigiangui,   // nên trả thêm cho front-end
+            })),
+        });
+    } catch (error) {
+        console.error("Lỗi lấy thông báo:", error);
+        return res.status(500).json({
+            message: "Lỗi server khi lấy thông báo",
+            error: error.message,
+        });
     }
-
-    const userIdNum = parseInt(idnguoidung, 10);
-    if (isNaN(userIdNum)) {
-      return res.status(400).json({ message: "idnguoidung không hợp lệ" });
-    }
-
-    const notifications = await ThongBao.findAll({
-      where: { idnguoidung: userIdNum },
-      order: [["thoigiangui", "DESC"]],
-    });
-
-    return res.status(200).json({
-      message: "Lấy thông báo thành công",
-      data: notifications.map((n) => ({
-        idthongbao: n.idthongbao,
-        tieude: n.tieude,
-        noidung: n.noidung,
-        thoigiangui: n.thoigiangui,   // nên trả thêm cho front-end
-      })),
-    });
-  } catch (error) {
-    console.error("Lỗi lấy thông báo:", error);
-    return res.status(500).json({
-      message: "Lỗi server khi lấy thông báo",
-      error: error.message,
-    });
-  }
 };
