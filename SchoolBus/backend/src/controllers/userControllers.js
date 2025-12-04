@@ -322,17 +322,21 @@ const pointIds = (jsonString) => {
 
 export const getSchedulesByMyChildren = async (req, res) => {
   try {
-    // --- 1. XÁC THỰC VÀ LẤY USER ID ---
+    // --------------------------------------------------------------
+    // 1. XÁC THỰC TOKEN
+    // --------------------------------------------------------------
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ message: "Chưa đăng nhập!" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "schoolbus_secret_key");
     const userId = decoded.id;
 
-    // --- 2. TÌM ID PHỤ HUYNH & HỌC SINH (Con của họ) ---
+    // --------------------------------------------------------------
+    // 2. TÌM PHỤ HUYNH & DANH SÁCH HỌC SINH
+    // --------------------------------------------------------------
     const parentInfo = await PhuHuynh.findOne({
       where: { idnguoidung: userId },
-      attributes: ['idphuhuynh']
+      attributes: ["idphuhuynh"]
     });
 
     if (!parentInfo) {
@@ -341,25 +345,33 @@ export const getSchedulesByMyChildren = async (req, res) => {
 
     const children = await HocSinh.findAll({
       where: { idphuhuynh: parentInfo.idphuhuynh },
-      attributes: ['mahocsinh']
+      attributes: ["mahocsinh"]
     });
 
-    const studentIds = children.map(child => child.mahocsinh);
+    const studentIds = children.map((child) => child.mahocsinh);
 
     if (studentIds.length === 0) {
-      return res.status(200).json({ message: "Người dùng này chưa có học sinh nào được liên kết.", schedules: [] });
+      return res.status(200).json({
+        message: "Người dùng này chưa có học sinh nào được liên kết.",
+        schedules: []
+      });
     }
 
-    // --- 3. XÂY DỰNG ĐIỀU KIỆN TÌM KIẾM ---
-    const searchConditions = studentIds.flatMap(id => [
+    // --------------------------------------------------------------
+    // 3. XÂY DỰNG ĐIỀU KIỆN LIKE DS HỌC SINH
+    // --------------------------------------------------------------
+    const searchConditions = studentIds.flatMap((id) => [
       { danhsachhocsinh: { [Op.like]: `[${id},%` } },
       { danhsachhocsinh: { [Op.like]: `%,${id},%` } },
       { danhsachhocsinh: { [Op.like]: `%,${id}]` } },
       { danhsachhocsinh: { [Op.like]: `[${id}]` } }
     ]);
-    const today = new Date().toISOString().split('T')[0];
 
-    // --- 4. TRUY VẤN LỊCH TRÌNH VÀ CÁC MỐI QUAN HỆ ---
+    const today = new Date().toISOString().split("T")[0];
+
+    // --------------------------------------------------------------
+    // 4. LẤY LỊCH + TUYẾN + XE + TÀI XẾ
+    // --------------------------------------------------------------
     let schedules = await LichChuyen.findAll({
       where: {
         [Op.or]: searchConditions,
@@ -368,145 +380,161 @@ export const getSchedulesByMyChildren = async (req, res) => {
       include: [
         {
           model: TuyenDuong,
-          as: 'tuyenDuongInfo',
-          attributes: { include: ['dsdiemdung'] }
+          as: "tuyenDuongInfo",
+          attributes: { include: ["dsdiemdung"] }
         },
         {
           model: XeBuyt,
-          as: 'xebuyt', // <--- SỬ DỤNG ALIAS THEO KẾT QUẢ JSON CỦA BẠN
-          attributes: ['bienso'],
-          include: [{
-            model: ViTriXe,
-            as: 'vitrixe',
-            attributes: ['kinhdo', 'vido']
-          }]
+          as: "xebuyt",
+          attributes: ["bienso"],
+          include: [
+            {
+              model: ViTriXe,
+              as: "vitrixe",
+              attributes: ["kinhdo", "vido"]
+            }
+          ]
         },
         {
           model: TaiXe,
-          as: 'taixe', // <--- SỬ DỤNG ALIAS THEO KẾT QUẢ JSON CỦA BẠN
-          attributes: ['kinhnghiem'],
-          include: [{
-            model: NguoiDung,
-            as: 'userInfo',
-            attributes: ['hoten', 'sodienthoai', 'anhdaidien']
-          }]
+          as: "taixe",
+          attributes: ["kinhnghiem"],
+          include: [
+            {
+              model: NguoiDung,
+              as: "userInfo",
+              attributes: ["hoten", "sodienthoai", "anhdaidien"]
+            }
+          ]
         }
-      ],
-      // order: ...
+      ]
     });
 
-    // --------------------------------------------------------------------
-    // TRUY VẤN BỔ SUNG: TRẠNG THÁI ĐÓN TRẢ
-    // --------------------------------------------------------------------
-    const scheduleIds = schedules.map(schedule => schedule.idlich);
+    // --------------------------------------------------------------
+    // 5. TRẠNG THÁI ĐÓN TRẢ
+    // --------------------------------------------------------------
+    const scheduleIds = schedules.map((s) => s.idlich);
+
     let trangThaiDonTraList = [];
     if (scheduleIds.length > 0) {
       trangThaiDonTraList = await TrangThaiDonTra.findAll({
-        where: {
-          idlich: scheduleIds
-        }
+        where: { idlich: scheduleIds }
       });
     }
 
-    // Tạo Map { idlich_mahocsinh: {trạng thái} }
     const trangThaiMap = trangThaiDonTraList.reduce((map, tt) => {
-      // Giả định trường ID học sinh trong TrangThaiDonTra là idhocsinh
       map[`${tt.idlich}_${tt.idhocsinh}`] = tt.toJSON();
       return map;
     }, {});
 
-
-    // --------------------------------------------------------------------
-    // TRUY VẤN BỔ SUNG: ĐIỂM DỪNG (TWO-STEP QUERY)
-    // --------------------------------------------------------------------
+    // --------------------------------------------------------------
+    // 6. TRUY VẤN ĐIỂM DỪNG
+    // --------------------------------------------------------------
     let allPointIds = new Set();
-    schedules.forEach(schedule => {
-      const routeData = schedule.tuyenDuongInfo;
-      if (routeData) {
-        const ids = pointIds(routeData.dsdiemdung);
-        ids.forEach(id => allPointIds.add(id));
+    schedules.forEach((s) => {
+      if (s.tuyenDuongInfo) {
+        pointIds(s.tuyenDuongInfo.dsdiemdung).forEach((id) => allPointIds.add(id));
       }
     });
 
-    const uniquePointIds = Array.from(allPointIds);
-    let pointMap = {};
-
-    if (uniquePointIds.length > 0) {
+    const pointMap = {};
+    if (allPointIds.size > 0) {
       const pointsDetail = await DiemDung.findAll({
-        where: { iddiemdung: uniquePointIds },
-        attributes: ['iddiemdung', 'tendiemdon', 'diachi', 'kinhdo', 'vido', 'trangthai']
+        where: { iddiemdung: Array.from(allPointIds) },
+        attributes: ["iddiemdung", "tendiemdon", "diachi", "kinhdo", "vido", "trangthai"]
       });
-      pointMap = pointsDetail.reduce((map, point) => {
-        map[point.iddiemdung] = point.toJSON();
-        return map;
-      }, {});
+
+      pointsDetail.forEach((p) => (pointMap[p.iddiemdung] = p.toJSON()));
     }
 
-    // --------------------------------------------------------------------
-    // TRUY VẤN BỔ SUNG: HỌC SINH (TWO-STEP QUERY)
-    // --------------------------------------------------------------------
+    // --------------------------------------------------------------
+    // 7. TRUY VẤN THÔNG TIN HỌC SINH
+    // --------------------------------------------------------------
     let allStudentIds = new Set();
-    schedules.forEach(schedule => {
-      const ids = parseStudentIds(schedule.danhsachhocsinh);
-      ids.forEach(id => allStudentIds.add(id));
+    schedules.forEach((s) => {
+      parseStudentIds(s.danhsachhocsinh).forEach((id) => allStudentIds.add(id));
     });
 
-    const uniqueStudentIds = Array.from(allStudentIds);
-    let studentMap = {};
-    if (uniqueStudentIds.length > 0) {
+    const studentMap = {};
+    if (allStudentIds.size > 0) {
       const studentsDetail = await HocSinh.findAll({
-        where: { mahocsinh: uniqueStudentIds },
-        attributes: ['mahocsinh', 'hoten', 'lop', 'namsinh', 'gioitinh', 'anhdaidien', 'idphuhuynh', 'iddiemdon']
+        where: { mahocsinh: Array.from(allStudentIds) },
+        attributes: [
+          "mahocsinh",
+          "hoten",
+          "lop",
+          "namsinh",
+          "gioitinh",
+          "anhdaidien",
+          "idphuhuynh",
+          "iddiemdon"
+        ]
       });
-      studentMap = studentsDetail.reduce((map, student) => {
-        map[student.mahocsinh] = student.toJSON();
-        return map;
-      }, {});
+
+      studentsDetail.forEach((stu) => (studentMap[stu.mahocsinh] = stu.toJSON()));
     }
 
-    // --------------------------------------------------------------------
-    // BƯỚC 6: GẮN CHI TIẾT VÀO LỊCH TRÌNH VÀ LOẠI BỎ DỮ LIỆU THỪA
-    // --------------------------------------------------------------------
-    const finalSchedules = schedules.map(schedule => {
+    // --------------------------------------------------------------
+    // 8. TRUY VẤN THÔNG BÁO THEO LỊCH (BỔ SUNG MỚI)
+    // --------------------------------------------------------------
+    let thongBaoList = [];
+    if (scheduleIds.length > 0) {
+      thongBaoList = await ThongBao.findAll({
+        where: { idlich: scheduleIds },
+        // attributes: ["idthongbao", "idlich", "noidung", "createdAt"]
+      });
+    }
+
+    const thongBaoMap = thongBaoList.reduce((map, tb) => {
+      if (!map[tb.idlich]) map[tb.idlich] = [];
+      map[tb.idlich].push(tb.toJSON());
+      return map;
+    }, {});
+
+    // --------------------------------------------------------------
+    // 9. BUILD FINAL SCHEDULES
+    // --------------------------------------------------------------
+    const finalSchedules = schedules.map((schedule) => {
       const scheduleData = schedule.toJSON();
       const idlich = scheduleData.idlich;
 
-      // 6a. Gắn chi tiết điểm dừng vào tuyến đường
+      // 9a. Điểm dừng
       if (scheduleData.tuyenDuongInfo) {
-        const idsInRoute = pointIds(scheduleData.tuyenDuongInfo.dsdiemdung);
-        const detailedPoints = idsInRoute
-          .map(id => pointMap[id])
-          .filter(point => point);
-
-        scheduleData.tuyenDuongInfo.diemDungDetails = detailedPoints;
+        const ids = pointIds(scheduleData.tuyenDuongInfo.dsdiemdung);
+        scheduleData.tuyenDuongInfo.diemDungDetails = ids
+          .map((id) => pointMap[id])
+          .filter((x) => x);
         delete scheduleData.tuyenDuongInfo.dsdiemdung;
       }
 
-      // 6b. Gắn chi tiết con của phụ huynh VÀ TRẠNG THÁI
+      // 9b. Học sinh của phụ huynh + trạng thái
       const idsInSchedule = parseStudentIds(scheduleData.danhsachhocsinh);
-      const myChildrenIdsInSchedule = idsInSchedule.filter(id => studentIds.includes(id));
+      const myChildrenIds = idsInSchedule.filter((id) => studentIds.includes(id));
 
-      const detailedMyChildren = myChildrenIdsInSchedule
-        .map(id => {
-          const studentDetail = studentMap[id];
-          if (studentDetail) {
-            // Gán trạng thái đón/trả vào chi tiết học sinh
-            const trangThai = trangThaiMap[`${idlich}_${id}`];
-            // Thêm trạng thái vào studentDetail
-            studentDetail.trangThaiDonTra = trangThai ? { loaitrangthai: trangThai.loaitrangthai } : { loaitrangthai: -1, trangthai_text: 'Chưa cập nhật' };
+      scheduleData.myChildren = myChildrenIds
+        .map((id) => {
+          const stu = studentMap[id];
+          if (stu) {
+            const tt = trangThaiMap[`${idlich}_${id}`];
+            stu.trangThaiDonTra = tt
+              ? { loaitrangthai: tt.loaitrangthai }
+              : { loaitrangthai: -1, trangthai_text: "Chưa cập nhật" };
           }
-          return studentDetail;
+          return stu;
         })
-        .filter(student => student);
+        .filter((x) => x);
 
-      scheduleData.myChildren = detailedMyChildren;
+      // 9c. Gắn danh sách THÔNG BÁO
+      scheduleData.thongbao = thongBaoMap[idlich] || [];
 
-      // Yêu cầu: LOẠI BỎ MẢNG trangThaiDonTras KHỎI KẾT QUẢ CUỐI CÙNG
       delete scheduleData.trangThaiDonTras;
 
       return scheduleData;
     });
 
+    // --------------------------------------------------------------
+    // 10. RESPONSE
+    // --------------------------------------------------------------
     res.status(200).json({
       message: "Lấy danh sách lịch trình thành công!",
       count: finalSchedules.length,
@@ -516,7 +544,7 @@ export const getSchedulesByMyChildren = async (req, res) => {
   } catch (error) {
     console.error("❌ Lỗi lấy danh sách lịch chuyến theo học sinh:", error);
 
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
       return res.status(401).json({ message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn!" });
     }
 
@@ -526,6 +554,7 @@ export const getSchedulesByMyChildren = async (req, res) => {
     });
   }
 };
+
 export const addRegisteredPoint = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -585,5 +614,81 @@ export const addNotification = async (req, res) => {
             message: "Lỗi máy chủ khi thêm thông báo!",
             error: error.message
         });
+    }
+}
+export const getAllNotification = async (req, res) => {
+    try{
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) {
+            return res.status(401).json({ message: "Chưa đăng nhập! (No token provided)" });
+        }
+
+        // Verify the token and extract the user ID (idnguoidung)
+        // Assuming the ID is stored in the 'id' field of the JWT payload
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "schoolbus_secret_key");
+        const idnguoidung = decoded.id; // This is the recipient ID (idnguoinhan)
+        const parent = await PhuHuynh.findOne({
+          where: {
+                idnguoidung: idnguoidung 
+            },
+
+        })
+        console.log("hehe",parent.idphuhuynh)
+
+        // 1. Fetch notifications where the recipient ID matches the authenticated user's ID
+        // (Sử dụng Sequelize-style query: where: { idnguoinhan: idnguoidung })
+        const notifications = await ThongBao.findAll({
+    where: {
+        trangthai: { [Op.ne]: -1 },
+        [Op.or]: [
+            { idphuhuynh: parent.idphuhuynh },
+            { idvaitro: "0" },
+            { idvaitro: "2" }
+        ]
+    },
+    
+    include: [
+      {
+                    model: NguoiDung,
+         
+                    attributes: ['id', 'hoten', 'vaitro'],
+                    required: false
+                },
+        {
+            model: PhuHuynh,
+            include: [
+                {
+                    model: NguoiDung,
+                    as: "userInfo",
+                    attributes: ["id", "hoten", "vaitro"],
+                    required: false
+                }
+            ],
+            attributes: ["idphuhuynh"],
+            required: false,
+            where: {
+                idphuhuynh: {
+                    [Op.ne]: null
+                }
+            }
+        }
+    ],
+    
+    order: [["thoigiangui", "DESC"]] // Nếu muốn
+});
+
+        
+        // 2. Return the list of notifications
+        return res.status(200).json(notifications);
+
+    } catch(error) {
+        console.error('Error fetching notifications:', error);
+        
+        // Handle JWT verification errors specifically
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn." });
+        }
+        
+        return res.status(500).json({ message: 'Lỗi server khi lấy thông báo.', error: error.message });
     }
 }

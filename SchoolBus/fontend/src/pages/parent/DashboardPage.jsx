@@ -237,18 +237,18 @@ export default function ParentDashboardPage() {
                 console.log("✅ Chuyến hoàn thành");
                 
                 // ⭐ Cập nhật thông báo hoàn thành
-                setTripNotifications((prev) => ({
-                    ...prev,
-                    [data.idlich]: {
-                        type: "trip_complete",
-                        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                    }
-                }));
+                // setTripNotifications((prev) => ({
+                //     ...prev,
+                //     [data.idlich]: {
+                //         type: "trip_complete",
+                //         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                //     }
+                // }));
                 
-                toast.success(`✅ Chuyến "${data.tentuyen}" đã hoàn thành`, {
-                    description: `Xe ${data.bienso} đã về đích`,
-                    duration: 10000
-                });
+                // toast.success(`✅ Chuyến "${data.tentuyen}" đã hoàn thành`, {
+                //     description: `Xe ${data.bienso} đã về đích`,
+                //     duration: 10000
+                // });
             }
         };
 
@@ -357,36 +357,27 @@ export default function ParentDashboardPage() {
             : (apiPosition || { lat: school.lat, lng: school.lng });
 
         // ⭐ Xây dựng notifications dựa trên tripNotifications state
-        const scheduleNotifications = [
-            {
-                id: 1,
-                message: schedule.trangthai === 1
-                    ? "Xe đang trên đường"
-                    : "Xe chưa khởi hành",
-                time: schedule.giobatdau.substring(0, 5),
-                type: schedule.trangthai === 1 ? "success" : "info"
-            }
-        ];
+        const scheduleNotifications = schedule.thongbao
 
         // ⭐ Thêm thông báo gần điểm đón (nếu có)
-        if (tripNotifications[schedule.idlich]?.type === "pickup_alert") {
-            scheduleNotifications.push({
-                id: 2,
-                message: `Xe đang cách điểm đón ${tripNotifications[schedule.idlich].distance}km`,
-                time: tripNotifications[schedule.idlich].timestamp,
-                type: "warning"
-            });
-        }
+        // if (tripNotifications[schedule.idlich]?.type === "pickup_alert") {
+        //     scheduleNotifications.push({
+        //         id: 2,
+        //         message: `Xe đang cách điểm đón ${tripNotifications[schedule.idlich].distance}km`,
+        //         time: tripNotifications[schedule.idlich].timestamp,
+        //         type: "warning"
+        //     });
+        // }
 
         // ⭐ Thêm thông báo hoàn thành (nếu chuyến đã xong)
-        if (tripNotifications[schedule.idlich]?.type === "trip_complete") {
-            scheduleNotifications.push({
-                id: 3,
-                message: "Xe hoàn thành chuyến đi",
-                time: tripNotifications[schedule.idlich].timestamp,
-                type: "success"
-            });
-        }
+        // if (tripNotifications[schedule.idlich]?.type === "trip_complete") {
+        //     scheduleNotifications.push({
+        //         id: 3,
+        //         message: "Xe hoàn thành chuyến đi",
+        //         time: tripNotifications[schedule.idlich].timestamp,
+        //         type: "success"
+        //     });
+        // }
 
         return {
             student: { 
@@ -493,13 +484,36 @@ export default function ParentDashboardPage() {
     }
 
     const trip = currentSelectedTrip;
+    // console.log(trip.notifications)
 
     const notifBadge = (type) => {
-        if (type === "success") return <Badge className="bg-green-100 text-green-800">An toàn</Badge>;
-        if (type === "warning") return <Badge className="bg-yellow-100 text-yellow-800">Cảnh báo</Badge>;
+        if (type == 1) return <Badge className="bg-yellow-600 text-white">Thông báo</Badge>;
+        if (type ==0) return <Badge className="bg-red-700 text-white">Cảnh báo</Badge>;
         return <Badge variant="secondary">Thông tin</Badge>;
     };
+    function formatToVietnamTime(isoString) {
+  const date = new Date(isoString);
 
+  // Tùy chọn định dạng
+  const options = {
+    weekday: 'long', // Thứ (e.g., "Thứ Năm")
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23', // Dùng định dạng 24 giờ
+    timeZone: 'Asia/Ho_Chi_Minh', // Múi giờ Việt Nam (GMT+7)
+  };
+
+  // Sử dụng 'vi-VN' (tiếng Việt - Việt Nam) cho ngôn ngữ và định dạng
+  const formatter = new Intl.DateTimeFormat('vi-VN', options);
+  const formattedDate = formatter.format(date);
+
+  // Kết quả cuối cùng có thể trông như: "Thứ Năm, 04/12/2025, 08:33:35"
+  return `${formattedDate} (GMT+7)`;
+}
     return (
         <div className="p-6 bg-gray-50 min-h-screen font-inter space-y-6">
             <Toaster position="top-right" richColors />
@@ -727,17 +741,18 @@ export default function ParentDashboardPage() {
                     <CardContent>
                         <div className="space-y-3">
                             {trip.notifications.map((n) => (
-                                <div key={n.id} className="flex items-center gap-3">
-                                    {n.type === "success" && <CheckCircle className="h-4 w-4 text-green-600" />}
-                                    {n.type === "warning" && <XCircle className="h-4 w-4 text-yellow-600" />}
-                                    {n.type === "info" && <Bell className="h-4 w-4 text-blue-600" />}
+                                <div key={n.idthongbao} className="flex items-center gap-3">
+                                    
+                                    {n.loai == 1 && <XCircle className="h-4 w-4 text-yellow-500" />}
+                                    {n.loai == 0 && <Bell className="h-4 w-4 text-red-500" />}
 
                                     <div className="flex-1">
-                                        <div className="text-sm">{n.message}</div>
-                                        <div className="text-xs text-muted-foreground">{n.time}</div>
+                                        <div className="text-sm">{n.tieude}</div>
+                                        <div className="text-xs">{n.noidung}</div>
+                                        <div className="text-xs text-muted-foreground">{formatToVietnamTime(n.thoigiangui)}</div>
                                     </div>
 
-                                    <div>{notifBadge(n.type)}</div>
+                                    <div>{notifBadge(n.loai)}</div>
                                 </div>
                             ))}
                         </div>

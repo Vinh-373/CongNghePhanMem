@@ -16,19 +16,24 @@ import {
     Eye
 } from "lucide-react";
 import { toast } from "sonner";
+// Import Alert nếu cần, nhưng tạm thời tôi không thấy nó được dùng trong mã cũ.
 
 // --- ⚙️ CẤU HÌNH API ---
 const API_BASE_URL = "http://localhost:5001/schoolbus/admin/get-all-schedules";
 const ADD_SCHEDULE_API_URL = "http://localhost:5001/schoolbus/admin/add-schedule";
+const UPDATE_SCHEDULE_API_URL = "http://localhost:5001/schoolbus/admin/update-schedule"; 
+const DELETE_SCHEDULE_API_URL = "http://localhost:5001/schoolbus/admin/delete-schedule"; 
 const API_GET_STUDENTS_URL = "http://localhost:5001/schoolbus/admin/get-all-students";
 const API_GET_ROUTES_URL = "http://localhost:5001/schoolbus/admin/get-all-routes";
 const API_GET_VEHICLES_URL = "http://localhost:5001/schoolbus/admin/get-all-vehicles";
 const API_GET_DRIVERS_URL = "http://localhost:5001/schoolbus/admin/get-all-drivers";
 
+// --- HELPER: GET WEEK RANGE ---
 const getWeekRange = (offset) => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const startDate = new Date(today);
+    // Tính toán ngày đầu tuần (Thứ Hai)
     const diff = (dayOfWeek === 0 ? 6 : dayOfWeek - 1); 
     startDate.setDate(today.getDate() - diff + (offset * 7));
     const endDate = new Date(startDate);
@@ -50,6 +55,7 @@ export default function SchedulesPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isStudentListOpen, setIsStudentListOpen] = useState(false);
     const [selectedTrip, setSelectedTrip] = useState(null); 
+    const [editingTrip, setEditingTrip] = useState(null); 
     const [scheduleData, setScheduleData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -64,6 +70,14 @@ export default function SchedulesPage() {
     const [formRouteId, setFormRouteId] = useState(null);
     
     const currentWeekRange = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
+
+    // --- HELPER: Lấy giá trị từ Option (chuỗi hoặc object) ---
+    const getValueFromOption = (data) => {
+        if (typeof data === 'object' && data !== null && 'value' in data) {
+            return data.value;
+        }
+        return data;
+    };
 
     // --- FETCH DỮ LIỆU CHO DROPDOWNS ---
     const loadDropdownData = async () => {
@@ -81,7 +95,7 @@ export default function SchedulesPage() {
                 const studentOptions = (studentsData.students || []).map(s => ({
                     value: s.mahocsinh.toString(),
                     label: `${s.mahocsinh} - ${s.hoten || 'N/A'}`,
-                    iddiemdon: s.diemDonMacDinh.iddiemdung
+                    iddiemdon: s.diemDonMacDinh?.iddiemdung 
                 }));
                 setAvailableStudents(studentOptions);
             }
@@ -122,15 +136,17 @@ export default function SchedulesPage() {
             setIsLoadingDropdowns(false);
         }
     };
-
+    
     // ⭐ LỌC HỌC SINH THEO TUYẾN ĐƯỜNG
     const filteredStudents = useMemo(() => {
-        if (!formRouteId) {
+        const currentRouteId = formRouteId || editingTrip?.route_id; // Đã sửa lỗi: dùng editingTrip?.route_id thay vì idtuyenduong
+        
+        if (!currentRouteId) {
             return [];
         }
 
         const selectedRoute = routesWithDetails.find(
-            r => r.idtuyenduong.toString() === formRouteId
+            r => r.idtuyenduong.toString() === currentRouteId.toString()
         );
 
         if (!selectedRoute || !selectedRoute.diemDungDetails) {
@@ -141,18 +157,13 @@ export default function SchedulesPage() {
             stop => stop.iddiemdung
         );
 
-        console.log('🔍 Route Stop IDs:', routeStopIds);
-        console.log('👥 All Students:', availableStudents);
-
         const filtered = availableStudents.filter(student => {
-            const hasValidStop = student.iddiemdon && routeStopIds.includes(student.iddiemdon);
-            console.log(`Student ${student.label}: iddiemdon=${student.iddiemdon}, hasValidStop=${hasValidStop}`);
-            return hasValidStop;
+            return student.iddiemdon && routeStopIds.includes(student.iddiemdon);
         });
 
-        console.log('✅ Filtered Students:', filtered);
         return filtered;
-    }, [formRouteId, routesWithDetails, availableStudents]);
+    }, [formRouteId, routesWithDetails, availableStudents, editingTrip]);
+
 
     // CẤU TRÚC FORM
     const TRIP_SCHEDULE_FIELDS = useMemo(() => {
@@ -182,10 +193,8 @@ export default function SchedulesPage() {
                 required: true,
                 options: safeRoutes,
                 placeholder: safeRoutes.length > 0 ? "Chọn tuyến đường" : "Đang tải tuyến đường...",
-                onChange: (value) => {
-                    console.log('🚏 Selected Route ID:', value);
-                    setFormRouteId(value);
-                }
+                // Cập nhật formRouteId khi người dùng chọn
+                onChange: (value) => { setFormRouteId(value); } 
             },
             {
                 name: "vehicle_code",
@@ -203,12 +212,15 @@ export default function SchedulesPage() {
                 options: safeDrivers,
                 placeholder: safeDrivers.length > 0 ? "Chọn tài xế" : "Đang tải tài xế..."
             },
+            // Đã loại bỏ trường 'trip_type'
             {
                 name: "status_text",
                 label: "Trạng thái",
                 type: "text",
                 required: true,
                 defaultValue: "Chờ khởi hành",
+                // Không cho phép sửa trạng thái bằng tay
+                disabled: true, 
             },
             {
                 name: "selected_students",
@@ -216,15 +228,16 @@ export default function SchedulesPage() {
                 type: "multi-select",
                 required: false,
                 options: filteredStudents,
-                disabled: !formRouteId,
-                placeholder: !formRouteId 
+                disabled: !formRouteId && !editingTrip,
+                placeholder: !formRouteId && !editingTrip
                     ? "Vui lòng chọn tuyến đường trước" 
                     : filteredStudents.length > 0 
                         ? `${filteredStudents.length} học sinh phù hợp với tuyến này`
                         : "Không có học sinh phù hợp với tuyến này"
             },
         ];
-    }, [availableRoutes, availableVehicles, availableDrivers, filteredStudents, formRouteId]);
+    }, [availableRoutes, availableVehicles, availableDrivers, filteredStudents, formRouteId, editingTrip]);
+    
 
     // --- FETCH SCHEDULES ---
     const loadSchedules = async () => {
@@ -264,6 +277,7 @@ export default function SchedulesPage() {
         }
     };
 
+    // --- EFFECT HOOKS ---
     useEffect(() => {
         loadDropdownData();
     }, []);
@@ -272,12 +286,16 @@ export default function SchedulesPage() {
         loadSchedules();
     }, [weekOffset]);
 
-    // ⭐ Reset formRouteId khi đóng dialog
+    // ⭐ Reset formRouteId và editingTrip khi đóng dialog
     useEffect(() => {
         if (!isDialogOpen) {
             setFormRouteId(null);
+            setEditingTrip(null);
         }
     }, [isDialogOpen]);
+
+
+    // --- HÀM XỬ LÝ SỰ KIỆN CHÍNH ---
 
     const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
     const handleNextWeek = () => setWeekOffset(prev => prev + 1);
@@ -287,49 +305,140 @@ export default function SchedulesPage() {
         setIsStudentListOpen(true);
     };
 
-    const handleAddTrip = async (formData) => {
-        setIsDialogOpen(false);
-        toast.loading(`Đang tạo lịch trình cho tuyến ${formData.route_id}...`, { id: 'addTripToast' });
+    // ⭐ SỬA LỖI Ở ĐÂY: Hàm Bắt đầu chỉnh sửa
+    const handleEditStart = (trip) => {
+        
+        let day = '', month = '', year = '';
+        
+        // 1. Xử lý Ngày Tháng (Fix lỗi trip_date undefined)
+        if (typeof trip.ngaydi === 'string' && trip.ngaydi.includes('/')) {
+            // Giả định API trả về "DD/MM/YYYY"
+            [day, month, year] = trip.ngaydi.split('/');
+        } else if (typeof trip.ngaydi === 'string' && trip.ngaydi.includes('-')) {
+             // Fallback: nếu API trả về ngày tháng ISO (YYYY-MM-DD...)
+             const parts = trip.ngaydi.split('T')[0].split('-');
+             if (parts.length === 3) {
+                 [year, month, day] = parts;
+             }
+        }
+        
+        // Đảm bảo định dạng YYYY-MM-DD chuẩn cho input date
+        const safeDay = String(day).padStart(2, '0');
+        const safeMonth = String(month).padStart(2, '0');
+        const safeYear = String(year);
+        
+        const dateString = (safeYear && safeMonth && safeDay && safeYear.length === 4) 
+            ? `${safeYear}-${safeMonth}-${safeDay}` 
+            : '';
 
-        const getValueFromOption = (data) => {
-            if (typeof data === 'object' && data !== null && 'value' in data) {
-                return data.value;
+
+        // 2. Xử lý Danh sách Học sinh (Fix lỗi tên trường)
+        let studentIds = [];
+        
+        if (Array.isArray(trip.danhsachhocsinh_ids)) {
+            // ⭐ Dùng trường mới từ API response
+            studentIds = trip.danhsachhocsinh_ids; 
+        } else if (typeof trip.danhsachhocsinh === 'string') {
+            // Fallback: Nếu API trả về trường cũ (chuỗi JSON)
+            try {
+                studentIds = JSON.parse(trip.danhsachhocsinh);
+            } catch (e) {
+                console.error("Lỗi parse JSON danhsachhocsinh:", e);
             }
-            return data;
-        };
+        }
+        
+        // Đảm bảo mảng ID là các chuỗi để tương thích với multi-select
+        const selectedStudents = (studentIds || []).map(String);
 
+        
+        const initialData = {
+            idlich: trip.idlich,
+            trip_date: dateString, // Định dạng YYYY-MM-DD đã được chuẩn hóa
+            trip_time: trip.giobatdau.substring(0, 5), 
+            route_id: trip.idtuyenduong.toString(),
+            vehicle_code: trip.idxebuyt.toString(),
+            driver_id: trip.idtaixe.toString(),
+            status_text: trip.trangthai_text,
+            selected_students: selectedStudents,
+        };
+        
+        setEditingTrip(initialData); 
+        setFormRouteId(initialData.route_id);
+        setIsDialogOpen(true);
+    };
+    
+    // 🆕 Hàm Xử lý Xóa
+    const handleDelete = async (idlich) => {
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa lịch trình có ID ${idlich} không?`)) {
+            return;
+        }
+
+        toast.loading(`Đang xóa lịch trình ${idlich}...`, { id: 'deleteTripToast' });
+        try {
+            const response = await fetch(`${DELETE_SCHEDULE_API_URL}/${idlich}`, {
+                method: 'PUT',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Lỗi khi xóa lịch trình.");
+            }
+
+            await loadSchedules();
+            toast.success(`Đã xóa lịch trình ${idlich} thành công!`, { id: 'deleteTripToast' });
+        } catch (error) {
+            console.error("Lỗi khi xóa chuyến đi:", error);
+            toast.error(error.message || "Không thể xóa lịch trình.", { id: 'deleteTripToast' });
+        }
+    };
+
+    // ⭐ SỬA Ở ĐÂY: Hàm xử lý Submit (SỬA HOẶC THÊM MỚI)
+    const handleAddOrUpdateTrip = async (formData) => {
+        setIsDialogOpen(false);
+        const isEditing = !!editingTrip;
+        const apiURL = isEditing ? `${UPDATE_SCHEDULE_API_URL}/${formData.idlich}` : ADD_SCHEDULE_API_URL;
+        const method = isEditing ? 'PUT' : 'POST';
+        const actionText = isEditing ? `cập nhật lịch trình ID ${formData.idlich}` : `tạo lịch trình cho tuyến ${formData.route_id}`;
+        
+        toast.loading(`Đang ${actionText}...`, { id: 'tripToast' });
+
+        // Chuyển mảng ID học sinh đã chọn thành chuỗi JSON "[1,2,3]" để gửi lên API
         let dshs = '[' + (formData.selected_students || []).map(s => getValueFromOption(s)).join(',') + ']';
+        
         const payload = {
             ngaydi: formData.trip_date,
             giobatdau: formData.trip_time + ':00',
-            loaichuyen: formData.trip_type,
+            // Đã loại bỏ trường 'loaichuyen'
             idtuyenduong: parseInt(getValueFromOption(formData.route_id)),
             idxebuyt: parseInt(getValueFromOption(formData.vehicle_code)),
             idtaixe: parseInt(getValueFromOption(formData.driver_id)),
-            danhsachhocsinh: dshs,
-            trangthai: 0,
-            trangthai_text: "Chưa chạy"
+            // ⭐ Trường danh sách học sinh gửi đi (danhsachhocsinh)
+            danhsachhocsinh: dshs, 
+            // Trạng thái
+            trangthai: isEditing ? editingTrip.trangthai : 0, 
+            trangthai_text: isEditing ? editingTrip.trangthai_text : "Chưa chạy"
         };
-
+        
         try {
-            const response = await fetch(ADD_SCHEDULE_API_URL, {
-                method: 'POST',
+            const response = await fetch(apiURL, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Lỗi khi tạo lịch trình.");
+                throw new Error(errorData.message || `Lỗi khi ${actionText}.`);
             }
 
             await loadSchedules();
-            toast.success(`Đã thêm lịch trình chuyến đi thành công!`, { id: 'addTripToast' });
+            toast.success(`Đã ${actionText} thành công!`, { id: 'tripToast' });
         } catch (error) {
-            console.error("Lỗi khi thêm chuyến đi:", error);
-            toast.error(error.message || "Không thể thêm lịch trình.", { id: 'addTripToast' });
+            console.error(`Lỗi khi ${actionText}:`, error);
+            toast.error(error.message || `Không thể ${actionText}.`, { id: 'tripToast' });
         }
     };
+
 
     const getStatusBadge = (statusText) => {
         switch (statusText) {
@@ -345,6 +454,7 @@ export default function SchedulesPage() {
         }
     };
 
+    // Chỉ cho phép sửa/xóa nếu chuyến chưa chạy/đang chạy
     const isActionDisabled = (statusText) => {
         return statusText === "Đã hoàn thành" || statusText === "Đang chạy";
     };
@@ -499,20 +609,26 @@ export default function SchedulesPage() {
                                                     >
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
+                                                    
+                                                    {/* Nút Chỉnh sửa */}
                                                     <Button
                                                         variant="outline"
                                                         size="icon"
                                                         className="hover:bg-blue-100"
                                                         title="Chỉnh sửa chuyến đi"
+                                                        onClick={() => handleEditStart(trip)}
                                                         disabled={isActionDisabled(trip.trangthai_text)}
                                                     >
                                                         <FilePenLine className={`h-4 w-4 ${isActionDisabled(trip.trangthai_text) ? 'text-gray-400' : 'text-blue-600'}`} />
                                                     </Button>
+                                                    
+                                                    {/* Nút Xóa */}
                                                     <Button
                                                         variant="outline"
                                                         size="icon"
                                                         className="hover:bg-red-100"
                                                         title="Xóa chuyến đi"
+                                                        onClick={() => handleDelete(trip.idlich)}
                                                         disabled={isActionDisabled(trip.trangthai_text)}
                                                     >
                                                         <Trash2 className={`h-4 w-4 ${isActionDisabled(trip.trangthai_text) ? 'text-gray-400' : 'text-red-600'}`} />
@@ -528,16 +644,17 @@ export default function SchedulesPage() {
                 </CardContent>
             </Card>
 
-            {/* DIALOG THÊM MỚI */}
+            {/* DIALOG THÊM MỚI / CHỈNH SỬA */}
             <AddEntityDialog
                 isOpen={isDialogOpen}
                 onClose={() => setIsDialogOpen(false)}
-                title="Thêm Lịch trình mới"
-                description="Điền thông tin chi tiết của chuyến xe mới."
+                title={editingTrip ? "Chỉnh Sửa Lịch Trình" : "Thêm Lịch trình mới"}
+                description={editingTrip ? `Cập nhật thông tin cho chuyến ID ${editingTrip.idlich}.` : "Điền thông tin chi tiết của chuyến xe mới."}
                 fields={TRIP_SCHEDULE_FIELDS}
-                onSubmit={handleAddTrip}
-                submitButtonText="Thêm Lịch trình"
-                accentColor="bg-amber-500 hover:bg-amber-600"
+                onSubmit={handleAddOrUpdateTrip}
+                submitButtonText={editingTrip ? "Lưu Cập Nhật" : "Thêm Lịch trình"}
+                accentColor={editingTrip ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600"}
+                initialData={editingTrip} 
             />
 
             {/* DIALOG HIỂN THỊ HỌC SINH */}

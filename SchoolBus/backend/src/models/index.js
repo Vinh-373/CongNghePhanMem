@@ -14,7 +14,6 @@ import DangKyDiemDonModel from "./DangKyDiemDon.js";
 import TrangThaiDonTraModel from "./TrangThaiDonTra.js";
 import ViTriXeModel from "./ViTriXe.js";
 import ThongBaoModel from "./ThongBao.js";
-import SuCoModel from "./SuCo.js";
 
 // Khởi tạo các model
 const NguoiDung = NguoiDungModel(sequelize, DataTypes);
@@ -29,7 +28,6 @@ const DangKyDiemDon = DangKyDiemDonModel(sequelize, DataTypes);
 const TrangThaiDonTra = TrangThaiDonTraModel(sequelize, DataTypes);
 const ViTriXe = ViTriXeModel(sequelize, DataTypes);
 const ThongBao = ThongBaoModel(sequelize, DataTypes);
-const SuCo = SuCoModel(sequelize, DataTypes);
 
 // =====================
 // Thiết lập quan hệ
@@ -96,11 +94,13 @@ DangKyDiemDon.belongsTo(PhuHuynh, { foreignKey: "idphuhuynh" });
 
 ViTriXe.belongsTo(XeBuyt, { foreignKey: "idxebuyt" });
 XeBuyt.belongsTo(ViTriXe, { foreignKey: "idvitri" });
-ThongBao.belongsTo(NguoiDung, { foreignKey: "idnguoidung" });
+
+ThongBao.belongsTo(PhuHuynh, { foreignKey: "idphuhuynh" });
+ThongBao.belongsTo(TaiXe, { foreignKey: "idtaixe" });
+ThongBao.belongsTo(NguoiDung, { foreignKey: "idnguoigui" });
 ThongBao.belongsTo(LichChuyen, { foreignKey: "idlich" });
 
-SuCo.belongsTo(TaiXe, { foreignKey: "idtaixe" });
-SuCo.belongsTo(LichChuyen, { foreignKey: "idlich" });
+
 
 TrangThaiDonTra.belongsTo(HocSinh, { foreignKey: "idhocsinh" });
 TrangThaiDonTra.belongsTo(LichChuyen, { foreignKey: "idlich" });
@@ -122,5 +122,4 @@ export {
     TrangThaiDonTra,
     ViTriXe,
     ThongBao,
-    SuCo
 };

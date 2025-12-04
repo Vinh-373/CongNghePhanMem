@@ -372,7 +372,7 @@ export const getCurrentTrip = async (req, res) => {
                 {
                     model: TuyenDuong,
                     as: "tuyenDuongInfo",
-                    attributes: ["tentuyen", "loaituyen", "dsdiemdung", "fullroutepolyline"],
+                    attributes: ["tentuyen", "loaituyen", "dsdiemdung"],
                     required: true,
                 },
                 {

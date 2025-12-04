@@ -12,16 +12,16 @@ import {
 export const ADMIN_MENU = [
   { icon: Home, label: "Trang chủ", href: "/admin/schoolbus/dashboard" },
   { icon: Bus, label: "Quản lý xe buýt", href: "/admin/schoolbus/vehicles" },
-  { icon: UserCheck, label: "Quản lý tài xế", href: "/admin/schoolbus/drivers" },
+  { icon: UserCheck, label: "QL tài khoản tài xế", href: "/admin/schoolbus/drivers" },
   { icon: Route, label: "Quản lý Tuyến đường", href: "/admin/schoolbus/routes" },
   { icon: MapPin, label: "Quản lý điểm đón", href: "/admin/schoolbus/pickup-points" },
   { icon: Users, label: "Quản lý học sinh", href: "/admin/schoolbus/students" },
-  { icon: UsersRound, label: "Quản lý phụ huynh", href: "/admin/schoolbus/parents" },
+  { icon: UsersRound, label: "QL tài khoản phụ huynh", href: "/admin/schoolbus/parents" },
   { icon: Calendar, label: "Quản lý lịch trình", href: "/admin/schoolbus/schedules" },
   { icon: BookCheck, label: "QL đăng ký điểm đón", href: "/admin/schoolbus/pickup-registrations" },
   { icon: MessageCircle, label: "Quản lý thông báo", href: "/admin/schoolbus/notification" },
   { icon: UserPen, label: "Thông tin tài khoản", href: "/admin/schoolbus/account" },
-  { icon: Settings, label: "Cài đặt hệ thống", href: "/admin/schoolbus/settings" },
+  
 ];
 
 /**

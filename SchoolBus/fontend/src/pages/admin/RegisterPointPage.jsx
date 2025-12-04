@@ -27,20 +27,16 @@ import {
     Loader2,
     XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 // === Import component Dialog ===
 import AddEntityDialog from "@/components/AddEntityDialog";
 
-// Giả định toast
-const toast = {
-    success: (msg) => console.log("SUCCESS:", msg),
-    error: (msg) => console.log("ERROR:", msg)
-};
-
-
 // === Cấu hình API ===
 const API_URL = "http://localhost:5001/schoolbus/admin/get-all-registered-pickup-points";
-const API_ADD_REGISTRATION = "http://localhost:5001/schoolbus/admin/add-registration";
+const API_ADD_REGISTRATION = "http://localhost:5001/schoolbus/admin/add-registered-pickup-points";
+const API_UPDATE_REGISTRATION = "http://localhost:5001/schoolbus/admin/update-registered-pickup-points";
+const API_SOFT_DELETE_REGISTRATION = "http://localhost:5001/schoolbus/admin/delete-registered-pickup-points";
 
 /**
  * Ánh xạ mã trạng thái (0: Chờ duyệt, 1: Đã duyệt)
@@ -51,16 +47,24 @@ const mapStatus = (code) => {
         case 0: return 'Chờ duyệt';
         default: return 'Không rõ';
     }
-}
+};
 
 // =======================================================
-// === Cấu hình Fields cho Dialog Thêm Đăng Ký ===
+// === Cấu hình Fields cho Dialog ===
 const REGISTRATION_FIELDS = [
     {
         name: 'mahocsinh',
         label: 'Mã Học Sinh (FK)',
         type: 'number',
         placeholder: 'Ví dụ: 7',
+        min: 1,
+        required: true
+    },
+    {
+        name: 'idphuhuynh',
+        label: 'Mã Phụ Huynh (FK)',
+        type: 'number',
+        placeholder: 'Ví dụ: 3',
         min: 1,
         required: true
     },
@@ -76,29 +80,30 @@ const REGISTRATION_FIELDS = [
         name: 'trangthai',
         label: 'Trạng thái',
         type: 'select',
-        options: ['Chờ duyệt', 'Đã duyệt'],
-        defaultValue: 'Chờ duyệt',
+        options: [
+            { value: "0", label: "Chờ duyệt" },
+            { value: "1", label: "Đã duyệt" }
+        ],
+        defaultValue: "0",
         required: true,
-        smColSpan: 2
     },
-    {
-        name: 'ghichu',
-        label: 'Ghi chú (Tùy chọn)',
-        type: 'textarea',
-        placeholder: 'Các yêu cầu đặc biệt...',
-        required: false,
-        smColSpan: 2
-    },
+   
 ];
 // =======================================================
-
 
 export default function RegistrationsPage() {
     const [registrations, setRegistrations] = useState([]);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    // Dialog Thêm
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    
+    // Dialog Sửa
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [editingRegistration, setEditingRegistration] = useState(null);
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Hàm lấy ngày giờ hiển thị
@@ -106,15 +111,12 @@ export default function RegistrationsPage() {
         if (!isoString) return 'N/A';
         try {
             let dateToParse = isoString;
-            // Xử lý chuỗi định dạng "YYYY-MM-DD HH:mm:ss" không có múi giờ
             if (isoString.includes(' ') && !isoString.includes('Z') && isoString.length > 10) {
-                // Thay thế khoảng trắng bằng 'T' để Date object hiểu là ISO 8601 (Local time)
-                dateToParse = isoString.replace(' ', 'T'); 
+                dateToParse = isoString.replace(' ', 'T');
             }
             const dateObj = new Date(dateToParse);
             if (isNaN(dateObj.getTime())) return isoString;
 
-            // Định dạng theo chuẩn Việt Nam
             return dateObj.toLocaleString('vi-VN', {
                 year: 'numeric',
                 month: '2-digit',
@@ -129,10 +131,10 @@ export default function RegistrationsPage() {
         }
     }, []);
 
-    // === LOGIC GỌI API VÀ XỬ LÝ DỮ LIỆU ĐÃ CẬP NHẬT CHÍNH XÁC THEO LOG ===
+    // === LOGIC GỌI API VÀ XỬ LÝ DỮ LIỆU ===
     const fetchRegistrationsData = useCallback(async () => {
         setError(null);
-        setRegistrations([]);
+        setLoading(true);
 
         try {
             const response = await fetch(API_URL);
@@ -145,38 +147,28 @@ export default function RegistrationsPage() {
             const data = await response.json();
             console.log("Fetched registrations data:", data);
 
-            // Kiểm tra cấu trúc data.registrations
             const registrationsList = Array.isArray(data.registrations) ? data.registrations : [];
 
-            // Xử lý dữ liệu từ API dựa trên cấu trúc mới
             const processedList = registrationsList.map(reg => {
-                // 💡 Đảm bảo tên thuộc tính khớp chính xác với ảnh log (DiemDung, hocsinh, phuhuynh)
                 const diemDung = reg.DiemDung || {};
                 const hocSinh = reg.hocsinh || {};
                 const phuHuynh = reg.phuhuynh || {};
-                const phuHuynhInfo = phuHuynh.userInfo || {}; 
+                const phuHuynhInfo = phuHuynh.userInfo || {};
 
-                // Trích xuất các trường
                 const id = reg.iddangky;
                 const studentId = reg.mahocsinh;
                 const stopId = reg.iddiemdung;
-                
-                // Trích xuất thông tin Học sinh
+
                 const studentName = hocSinh.hoten || 'N/A';
                 const studentClass = hocSinh.lop || 'N/A';
-                
-                // Trích xuất thông tin Phụ huynh
+
                 const parentName = phuHuynhInfo.hoten || 'N/A';
                 const parentPhone = phuHuynhInfo.sodienthoai || 'N/A';
 
-                // Trích xuất thông tin Điểm Dừng
-                // ⚠️ Dùng tên thuộc tính 'tendiemdung'
                 const stopName = diemDung.tendiemdon || 'N/A';
-                
-                // Trích xuất và định dạng Thời gian đăng ký
-                // ⚠️ Dùng tên thuộc tính 'thoigiandangky'
-                const time = formatDateTime(reg.thoigiandangky); 
-                
+
+                const time = formatDateTime(reg.thoigiandangky);
+
                 const status = mapStatus(reg.trangthai);
 
                 return {
@@ -190,7 +182,11 @@ export default function RegistrationsPage() {
                     stopName,
                     time,
                     status,
-                    rawStatus: reg.trangthai
+                    rawStatus: reg.trangthai,
+                    ghichu: reg.ghichu || '',
+                    idphuhuynh: reg.idphuhuynh,
+                    // Giữ lại toàn bộ dữ liệu gốc cho sửa
+                    raw: reg
                 };
             });
 
@@ -199,13 +195,14 @@ export default function RegistrationsPage() {
         } catch (err) {
             console.error("Fetch error:", err);
             setError(`Không thể tải dữ liệu đăng ký: ${err.message}. Vui lòng kiểm tra kết nối API.`);
+        } finally {
+            setLoading(false);
         }
     }, [formatDateTime]);
 
     useEffect(() => {
         fetchRegistrationsData();
     }, [fetchRegistrationsData]);
-
 
     // === LOGIC TÌM KIẾM VÀ LỌC DỮ LIỆU ===
     const filteredRegistrations = useMemo(() => {
@@ -223,14 +220,14 @@ export default function RegistrationsPage() {
         );
     }, [searchTerm, registrations]);
 
-    // === TÍNH TOÁN THỐNG KÊ (Giữ nguyên) ===
+    // === TÍNH TOÁN THỐNG KÊ ===
     const stats = useMemo(() => ({
         total: registrations.length,
         approved: registrations.filter((r) => r.status === "Đã duyệt").length,
         pending: registrations.filter((r) => r.status === "Chờ duyệt").length,
     }), [registrations]);
 
-    // Helper để lấy badge màu theo trạng thái (Giữ nguyên)
+    // === Badge theo trạng thái ===
     const getStatusBadge = (status) => {
         switch (status) {
             case "Đã duyệt":
@@ -242,22 +239,15 @@ export default function RegistrationsPage() {
         }
     };
 
-    // === XỬ LÝ SUBMIT DIALOG THÊM MỚI (Giữ nguyên) ===
+    // === XỬ LÝ SUBMIT DIALOG THÊM MỚI ===
     const handleAddRegistration = async (newRegData) => {
         setIsSubmitting(true);
-        let statusMessage = '';
-
-        const statusMap = {
-            'Chờ duyệt': 0,
-            'Đã duyệt': 1,
-        };
 
         const processedData = {
             mahocsinh: Number(newRegData.mahocsinh),
+            idphuhuynh: Number(newRegData.idphuhuynh) || 1, // Giá trị mặc định nếu không có
             iddiemdung: Number(newRegData.iddiemdung),
-            trangthai: statusMap[newRegData.trangthai] !== undefined
-                ? statusMap[newRegData.trangthai]
-                : 0,
+            trangthai: Number(newRegData.transthai) || 0,
             ghichu: newRegData.ghichu || ''
         };
 
@@ -274,27 +264,104 @@ export default function RegistrationsPage() {
                 throw new Error(data.message || "Thêm thất bại. Vui lòng kiểm tra dữ liệu.");
             }
 
-            statusMessage = "🎉 Thêm đăng ký điểm đón thành công!";
-            toast.success(statusMessage);
-
-            setIsDialogOpen(false);
+            toast.success("🎉 Thêm đăng ký điểm đón thành công!");
+            setIsAddDialogOpen(false);
             fetchRegistrationsData();
         } catch (err) {
-            statusMessage = `❌ Lỗi thêm đăng ký: ${err.message}`;
-            toast.error(statusMessage);
+            toast.error(`❌ Lỗi thêm đăng ký: ${err.message}`);
             console.error("Lỗi API Thêm Đăng Ký:", err);
         } finally {
             setIsSubmitting(false);
         }
     };
-    // =======================================================
+
+    // === XỬ LÝ SUBMIT DIALOG SỬA ===
+    const handleUpdateRegistration = async (updatedData) => {
+        setIsSubmitting(true);
+
+        if (!editingRegistration) return;
+
+        const processedData = {
+            mahocsinh: Number(updatedData.mahocsinh),
+            idphuhuynh: Number(updatedData.idphuhuynh) || editingRegistration.idphuhuynh,
+            iddiemdung: Number(updatedData.iddiemdung),
+            trangthai: Number(updatedData.trangthai) || 0,
+            ghichu: updatedData.ghichu || ''
+        };
+
+        try {
+            const res = await fetch(`${API_UPDATE_REGISTRATION}/${editingRegistration.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(processedData),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.message || "Cập nhật thất bại. Vui lòng kiểm tra dữ liệu.");
+            }
+
+            toast.success("✅ Cập nhật đăng ký điểm đón thành công!");
+            setIsEditDialogOpen(false);
+            setEditingRegistration(null);
+            fetchRegistrationsData();
+        } catch (err) {
+            toast.error(`❌ Lỗi cập nhật đăng ký: ${err.message}`);
+            console.error("Lỗi API Cập nhật Đăng Ký:", err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // === XỬ LÝ XÓA MỀM ===
+    const handleSoftDeleteRegistration = async (id) => {
+        if (!window.confirm("Bạn có chắc chắn muốn xóa mềm đăng ký này không?")) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_SOFT_DELETE_REGISTRATION}/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.message || "Xóa mềm thất bại.");
+            }
+
+            toast.success("✅ Xóa mềm đăng ký thành công!");
+            fetchRegistrationsData();
+        } catch (err) {
+            toast.error(`❌ Lỗi xóa mềm đăng ký: ${err.message}`);
+            console.error("Lỗi API Xóa Mềm Đăng Ký:", err);
+        }
+    };
+
+    // === Hàm mở dialog sửa ===
+    const handleEditClick = (reg) => {
+        setEditingRegistration(reg);
+        setIsEditDialogOpen(true);
+    };
+
+    // === Chuẩn bị initialData cho dialog sửa ===
+    const getInitialDataForEdit = (reg) => {
+        return {
+            mahocsinh: String(reg.studentId),
+            idphuhuynh: String(reg.idphuhuynh),
+            iddiemdung: String(reg.stopId),
+            trangthai: String(reg.rawStatus),
+            ghichu: reg.ghichu || '',
+        };
+    };
 
     return (
-
         <div className="space-y-6">
             <h1 className="text-3xl font-bold tracking-tight">Quản Lý Đăng Ký Điểm Đón</h1>
 
-            {/* === 1. THẺ TỔNG QUAN (Giữ nguyên) === */}
+            {/* === 1. THẺ TỔNG QUAN === */}
             <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -330,19 +397,17 @@ export default function RegistrationsPage() {
                 </Card>
             </div>
 
-            {/* --- */}
-
-            {/* === 2. BẢNG DANH SÁCH ĐĂNG KÝ (Cập nhật hiển thị SĐT) === */}
+            {/* === 2. BẢNG DANH SÁCH ĐĂNG KÝ === */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Danh sách Đăng Ký ({registrations.length})</CardTitle>
-                    <Button onClick={() => setIsDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={() => setIsAddDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
                         <PlusCircle className="mr-2 h-4 w-4" />
                         Tạo Đăng Ký Mới
                     </Button>
                 </CardHeader>
                 <CardContent>
-                    {/* Thanh tìm kiếm giữ nguyên */}
+                    {/* Thanh tìm kiếm */}
                     <div className="relative mb-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <input
@@ -363,7 +428,13 @@ export default function RegistrationsPage() {
                             </div>
                         )}
 
-                        {!error && (
+                        {loading && (
+                            <div className="flex items-center justify-center py-10">
+                                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                            </div>
+                        )}
+
+                        {!error && !loading && (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -405,7 +476,7 @@ export default function RegistrationsPage() {
                                                             variant="outline"
                                                             size="icon"
                                                             className="hover:bg-blue-100 text-blue-600 border-blue-200"
-                                                            onClick={() => alert(`Sửa đăng ký ID: ${reg.id}`)}
+                                                            onClick={() => handleEditClick(reg)}
                                                         >
                                                             <FilePenLine className="h-4 w-4" />
                                                         </Button>
@@ -413,7 +484,7 @@ export default function RegistrationsPage() {
                                                             variant="outline"
                                                             size="icon"
                                                             className="text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200"
-                                                            onClick={() => alert(`Xóa đăng ký ID: ${reg.id}`)}
+                                                            onClick={() => handleSoftDeleteRegistration(reg.id)}
                                                         >
                                                             <Trash2 className="h-4 w-4" />
                                                         </Button>
@@ -435,20 +506,36 @@ export default function RegistrationsPage() {
                 </CardContent>
             </Card>
 
-            {/* --- */}
-
-            {/* === 3. Component Dialog Thêm Đăng Ký Mới (Giữ nguyên) === */}
+            {/* === 3. Dialog Thêm Đăng Ký Mới === */}
             <AddEntityDialog
-                isOpen={isDialogOpen}
-                onClose={() => setIsDialogOpen(false)}
+                isOpen={isAddDialogOpen}
+                onClose={() => setIsAddDialogOpen(false)}
                 title="Tạo Đăng Ký Điểm Đón Mới"
                 description="Nhập Mã Học Sinh và Mã Điểm Dừng để tạo một yêu cầu đăng ký mới."
                 fields={REGISTRATION_FIELDS}
                 onSubmit={handleAddRegistration}
                 submitButtonText={isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Thêm Đăng Ký"}
                 accentColor="bg-blue-600 hover:bg-blue-700"
-                isSubmitting={isSubmitting}
             />
+
+            {/* === 4. Dialog Sửa Đăng Ký === */}
+            {editingRegistration && (
+                <AddEntityDialog
+                    key={editingRegistration.id}
+                    isOpen={isEditDialogOpen}
+                    onClose={() => {
+                        setIsEditDialogOpen(false);
+                        setEditingRegistration(null);
+                    }}
+                    title={`Sửa Đăng Ký: ID ${editingRegistration.id}`}
+                    description="Cập nhật thông tin đăng ký điểm đón."
+                    fields={REGISTRATION_FIELDS}
+                    initialData={getInitialDataForEdit(editingRegistration)}
+                    onSubmit={handleUpdateRegistration}
+                    submitButtonText={isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Cập nhật"}
+                    accentColor="bg-green-600 hover:bg-green-700"
+                />
+            )}
         </div>
     );
 }

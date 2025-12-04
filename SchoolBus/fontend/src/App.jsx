@@ -6,6 +6,7 @@ import Register from "./pages/RegisterPage.jsx";
 import DashboardPage from "./pages/admin/DashboardPage.jsx";
 import { NotFound } from "./pages/NotFound.jsx";
 import NotificationPage from "./pages/admin/NotificationPage.jsx";
+import NotificationParentPage from "./pages/parent/NotificationPage.jsx";
 import VehiclesPage from "./pages/admin/VehiclesPage.jsx";
 import DriversPage from "./pages/admin/DriversPage.jsx";
 import RoutesPage from "./pages/admin/RoutesPage.jsx";
@@ -54,7 +55,7 @@ function App() {
             <Route path="children" element={<ChildInfo />} />
             <Route path="account" element={<ParentAccount />} />
             <Route path="pickup-point" element={<PointsRegisterPage />} />
-            <Route path="notifications" element={<NotificationPage />} />
+            <Route path="notifications" element={<NotificationParentPage />} />
           </Route>
           <Route path="/driver/schoolbus" element={<MainLayout />}>
             <Route path="dashboard" element={<DriverDashboard />} />
